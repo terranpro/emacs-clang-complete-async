@@ -167,9 +167,10 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 (defsubst ac-clang-create-position-string (pos)
   (save-excursion
     (goto-char pos)
-    (format "row:%d\ncolumn:%d\n"
+    (format "row:%d\ncolumn:%d\nprefix:%s\n"
             (line-number-at-pos)
-            (1+ (- (point) (line-beginning-position))))))
+            (1+ (- (point) (line-beginning-position)))
+	    (or ac-prefix ""))))
 
 (defsubst ac-clang-lang-option ()
   (or (and ac-clang-lang-option-function
