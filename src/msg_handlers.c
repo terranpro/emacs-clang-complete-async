@@ -64,8 +64,12 @@ void completion_doCompletion(completion_Session *session, FILE *fp)
 
     /* get where to complete at */
     int row, column;
+    char prefix[512];
     fscanf(fp, "row:%d",    &row);    __skip_the_rest(fp);
     fscanf(fp, "column:%d", &column); __skip_the_rest(fp);
+    fscanf(fp, "prefix:"); 
+    fgets(prefix, sizeof(prefix), fp);
+    //__skip_the_rest(fp);
 
     /* get a copy of fresh source file */
     completion_readSourcefile(session, fp);
@@ -74,9 +78,26 @@ void completion_doCompletion(completion_Session *session, FILE *fp)
     res = completion_codeCompleteAt(session, row, column);
     clang_sortCodeCompletionResults(res->Results, res->NumResults);
 
+    int len = strlen(prefix);
+    if (prefix[len-1] == '\n')
+      prefix[len-1] = '\0';
+
+    //fprintf(stdout, "COMPLETION: %s : [#%d#]\n", prefix, strlen(prefix));
+    /* if (strcmp(prefix, "") == 0 || prefix[0] == '\0') { */
+    /*   prefix[0] = '$'; */
+    /*   prefix[1] = '\0'; */
+    /* } */
+
     /* fprintf(stderr, "code completion results: %d\n", res->NumResults); */
-    completion_printCodeCompletionResults(res, stdout);
-    fprintf(stdout, "$"); fflush(stdout);    /* we need to inform emacs that all 
+    completion_printCodeCompletionResults(res, stdout, prefix);
+
+    //fprintf(stdout, "COMPLETION: %s\n", prefix);
+    /* fprintf(stdout, "COMPLETION: before: %lu\n", res->NumResults); */
+    /* fprintf(stdout, "COMPLETION: after: %lu\n", clang_codeCompleteGetContexts(res->Results)); */
+    /* fprintf(stdout, "COMPLETION: %d\n", */
+    /* 	    clang_codeCompleteGetContainerKind(res, NULL)); */
+
+    fprintf(stdout, "\n$"); fflush(stdout);    /* we need to inform emacs that all 
                                                 candidates has already been sent */
     clang_disposeCodeCompleteResults(res);
 }

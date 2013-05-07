@@ -54,10 +54,11 @@ void startup_completionSession(int argc, char *argv[], completion_Session *sessi
 
 
 /* Print specified completion string to fp. */
-void completion_printCompletionLine(CXCompletionString completion_string, FILE *fp);
+void completion_printCompletionLine(CXCompletionString completion_string, FILE *fp, char const *prefix);
 
 /* Print all completion results to fp */
-void completion_printCodeCompletionResults(CXCodeCompleteResults *res, FILE *fp);
+void completion_printCodeCompletionResults(CXCodeCompleteResults *res, FILE *fp,
+					   char const *prefix);
 
 
 /* Simple wrappers for clang parser functions */

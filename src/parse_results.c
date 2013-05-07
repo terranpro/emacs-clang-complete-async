@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <strings.h>
 
 #include "completion.h"
 
@@ -15,8 +16,9 @@
  * This function returns the number of completion chunks on success, or it
  * would return an -1 if no TypedText chunk was found.
  */
-static int completion_printCompletionHeadTerm(
-    CXCompletionString completion_string, FILE *fp)
+static int 
+completion_printCompletionHeadTerm( CXCompletionString completion_string,
+				    FILE *fp, char const *prefix )
 {
     int i_chunk  = 0;
     int n_chunks = clang_getNumCompletionChunks(completion_string);
@@ -30,12 +32,19 @@ static int completion_printCompletionHeadTerm(
         {
             /* We got it, just dump it to fp */
             ac_string = clang_getCompletionChunkText(completion_string, i_chunk);
-            fprintf(fp, "COMPLETION: %s", clang_getCString(ac_string));
+	    char *string = clang_getCString(ac_string);
+
+	    //fprintf(fp, "COMPLETION: %s vs. %s\n", prefix, string);
+
+	    if ( strncasecmp(prefix, string, strlen(prefix)) != 0 )
+	      return 0;
+            fprintf(fp, "COMPLETION: %s", string);
             clang_disposeString(ac_string);
             return n_chunks;    /* care package on the way */
         }
     }
 
+    fprintf(fp, "\n");
     return -1;   /* We haven't found TypedText chunk in completion_string */
 }
 
@@ -100,10 +109,13 @@ static void completion_printAllCompletionTerms(
 
 /* Print specified completion string to fp. */
 void completion_printCompletionLine(
-    CXCompletionString completion_string, FILE *fp)
+				    CXCompletionString completion_string, 
+				    FILE *fp, char const *prefix)
 {
     /* print completion item head: COMPLETION: typed_string */
-    if (completion_printCompletionHeadTerm(completion_string, fp) > 1)
+  int result = completion_printCompletionHeadTerm(completion_string, 
+						  fp, prefix);
+  if (result > 0)
     {
         /* If there's not only one TypedText chunk in this completion string,
          * we still have a lot of info to dump: 
@@ -112,16 +124,26 @@ void completion_printCompletionLine(
          */
         fprintf(fp, " : ");
         completion_printAllCompletionTerms(completion_string, fp);
+	fprintf(fp, "\n");
     }
-
-    printf("\n");
+  else if (result < 0)
+    fprintf(fp, "\n");
 }
 
 /* Print all completion results to fp */
-void completion_printCodeCompletionResults(CXCodeCompleteResults *res, FILE *fp)
+void completion_printCodeCompletionResults(CXCodeCompleteResults *res, FILE *fp,
+					   char const *prefix)
 {
     unsigned int i = 0;
+
     for ( ; i < res->NumResults; i++) {
-        completion_printCompletionLine(res->Results[i].CompletionString, fp);
+      completion_printCompletionLine(res->Results[i].CompletionString,
+				     fp, prefix);
     }
 }
+
+
+
+
+
+
