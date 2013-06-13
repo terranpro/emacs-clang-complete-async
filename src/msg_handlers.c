@@ -241,6 +241,30 @@ void completion_doSyntaxCheck(completion_Session *session, FILE *fp)
     fprintf(stdout, "$"); fflush(stdout);    /* end of output */
 }
 
+/* Locate the definition (or declaration?!) of tag */
+void completion_doLocate(completion_Session *session, FILE *fp)
+{
+    int row, column;
+    char prefix[512];
+
+    fscanf(fp, "row:%d",    &row);    __skip_the_rest(fp);
+    fscanf(fp, "column:%d", &column); __skip_the_rest(fp);
+    fscanf(fp, "prefix:"); 
+    fgets(prefix, sizeof(prefix), fp);
+
+    /* get a copy of fresh source file */
+    completion_readSourcefile(session, fp);
+
+    LocationResult loc = completion_locateAt(session, row, column);
+
+    fprintf(stdout, "%s\n", loc.filename);
+    fprintf(stdout, "%d\n", loc.line);
+    fprintf(stdout, "%d\n", loc.column);
+
+    fprintf(stdout, "$"); 
+    fflush(stdout);
+}
+
 /* When emacs buffer is killed, a SHUTDOWN message is sent automatically by a hook 
    function to inform the completion server (this program) to terminate. */
 void completion_doShutdown(completion_Session *session, FILE *fp)

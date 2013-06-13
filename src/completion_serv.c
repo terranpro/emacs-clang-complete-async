@@ -97,3 +97,42 @@ completion_codeCompleteAt(
             session->cx_tu, session->src_filename, line, column, 
             &unsaved_files, 1, session->CompleteAtOptions);
 }
+
+LocationResult
+completion_locateAt(completion_Session *session, int line, int column)
+{
+  CXSourceLocation loc;
+  CXFile file = clang_getFile( session->cx_tu, 
+			       session->src_filename );
+  LocationResult lr;
+
+  fprintf(stdout, "Checking file %s line %d col %d\n",
+	  session->src_filename,
+	  line,
+	  column);
+
+  if (!file) {
+    fprintf(stdout, "DogBaby!\n");
+    return lr;
+  }
+
+  loc = clang_getLocation( session->cx_tu, file, line, column);
+  CXCursor cursor = clang_getCursor( session->cx_tu, loc );
+
+  
+  fprintf(stdout, "Cursor1 Spelling: %s\n",
+	  clang_getCString( clang_getCursorSpelling( cursor ) ) );
+
+  loc = clang_getCursorLocation( cursor );
+
+  unsigned l, c;
+  clang_getSpellingLocation( loc, &file, &l, &c, NULL );
+
+  CXString cxfname = clang_getFileName( file );
+
+  lr.filename = clang_getCString( cxfname );
+  lr.line = l;
+  lr.column = c;
+
+  return lr;
+}

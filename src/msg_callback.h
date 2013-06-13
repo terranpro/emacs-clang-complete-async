@@ -38,6 +38,13 @@ void completion_AcceptRequest(completion_Session *session, FILE *fp);
         source_length:[#src_length#]
         <# SOURCE CODE #>
 
+   LOCATE: Find location of the current cursor given by row/col.
+   Message format:
+        row:[#row#]
+	column:[#column#]
+	source_length:[#src_length#]
+        <# SOURCE CODE #>
+	
    SHUTDOWN: Shut down the completion server (this program)
    [no message body]
 */
@@ -49,6 +56,7 @@ void completion_doCmdlineArgs(completion_Session *session, FILE *fp);  /* CMDLIN
 void completion_doFileChanged(completion_Session *session, FILE *fp);  /* FILECHANGED */
 void completion_doReparse(completion_Session *session, FILE *fp);      /* REPARSE */
 void completion_doSyntaxCheck(completion_Session *session, FILE *fp);  /* SYNTAXCHECK */
+void completion_doLocate(completion_Session *session, FILE *fp); /* LOCATE */
 void completion_doShutdown(completion_Session *session, FILE *fp);     /* SHUTDOWN */
 
 

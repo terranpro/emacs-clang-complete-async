@@ -146,4 +146,3 @@ void completion_printCodeCompletionResults(CXCodeCompleteResults *res, FILE *fp,
 
 
 
-

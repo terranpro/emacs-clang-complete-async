@@ -437,6 +437,19 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
     (process-send-string proc (ac-clang-create-position-string (- (point) (length ac-prefix))))
     (ac-clang-send-source-code proc)))
 
+(defun ac-clang-send-location-request (&optional proc)
+  (interactive)
+  (unless proc 
+    (setq proc ac-clang-completion-process))
+
+  (if (not (string= current-clang-file (buffer-file-name)))
+      (ac-clang-filechanged))
+  (save-restriction
+    (widen)
+    (process-send-string proc "LOCATE\n")
+    (process-send-string proc (ac-clang-create-position-string (- (point) (length ac-prefix))))
+    (ac-clang-send-source-code proc)))
+
 (defun ac-clang-send-syntaxcheck-request (proc)
   (save-restriction
     (widen)
@@ -614,6 +627,13 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
    (if ac-clang-completion-process
        (ac-clang-filechanged)
        (ac-clang-launch-completion-process-internal)))
+
+(defun ac-clang-relaunch-completion-process ()
+   (interactive)
+   (if ac-clang-completion-process
+       (when (process-live-p ac-clang-completion-process)
+	 (quit-process ac-clang-completion-process)))
+   (ac-clang-launch-completion-process-internal))
 
 (defun ac-clang-launch-completion-process-internal ()
    (interactive)

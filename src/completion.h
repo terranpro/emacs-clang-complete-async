@@ -68,6 +68,15 @@ int completion_reparseTranslationUnit(completion_Session *session);
 CXCodeCompleteResults* completion_codeCompleteAt(
     completion_Session *session, int line, int column);
 
+typedef struct LocationResult {
+  char const *filename;
+  unsigned line;
+  unsigned column;
+} LocationResult;
+
+LocationResult
+completion_locateAt(completion_Session *session, int line, int column);
+
 
 
 #endif /* _COMPLETION_SESSION_H_ */
