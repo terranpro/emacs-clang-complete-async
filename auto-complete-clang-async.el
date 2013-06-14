@@ -444,8 +444,12 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 
   (if (not (string= current-clang-file (buffer-file-name)))
       (ac-clang-filechanged))
+  (with-current-buffer (process-buffer proc)
+    (erase-buffer))
   (save-restriction
     (widen)
+    (setq ac-clang-status 'locate)
+    
     (process-send-string proc "LOCATE\n")
     (process-send-string proc (ac-clang-create-position-string (- (point) (length ac-prefix))))
     (ac-clang-send-source-code proc)))
@@ -520,6 +524,28 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
   (with-current-buffer (process-buffer proc)
     (ac-clang-parse-output ac-clang-saved-prefix)))
 
+(defun ac-clang-parse-location-results (proc)
+  (with-current-buffer (process-buffer proc)
+    (let ((input "LOCATE:
+file:/usr/include/stdio.h
+line:10
+column:12")
+	  (result)
+	  (regexp (rx "LOCATE:" (zero-or-more not-newline) ?\n
+		      "file:" (group (one-or-more (not (any ?\n)))) ?\n
+		      "line:" (group (one-or-more (not (any ?\n)))) ?\n
+		      "column:" (group (one-or-more (not (any ?\n)))))))
+      ;(string-match regexp input)
+      (goto-char (point-min))
+      (when (re-search-forward regexp nil t)
+	(format "%s %s %s" (match-string 1) (match-string 2) (match-string 3)  )
+
+	(setq result 
+	      (list (match-string 1) 
+	       (string-to-number (match-string 2))
+	       (string-to-number (match-string 3)))))
+      result)))
+
 (defun ac-clang-filter-output (proc string)
   (ac-clang-append-process-output-to-process-buffer proc string)
   (if (string= (substring string -1 nil) "$")
@@ -529,6 +555,14 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
          (ac-start)
          (ac-update))
         
+	(locate 
+	 ;(ac-clang-parse-location-results proc)
+	 (setq ac-clang-status 'idle)
+	 (let ((result (ac-clang-parse-location-results proc)))
+	  (ac-clang-goto-definition (car result) 
+				    (cadr result)
+				    (caddr result))))
+
         (otherwise
          (setq ac-clang-current-candidate (ac-clang-parse-completion-results proc))
          ;; (message "ac-clang results arrived")

@@ -117,22 +117,54 @@ completion_locateAt(completion_Session *session, int line, int column)
   }
 
   loc = clang_getLocation( session->cx_tu, file, line, column);
-  CXCursor cursor = clang_getCursor( session->cx_tu, loc );
 
-  
-  fprintf(stdout, "Cursor1 Spelling: %s\n",
-	  clang_getCString( clang_getCursorSpelling( cursor ) ) );
+  CXCursor cursor;
+  CXCursor prevcursor;
+  CXString cxfname;
+  unsigned l;
+  unsigned c;
+
+  cursor = clang_getCursor( session->cx_tu, loc );
+  fprintf(stdout, "Cursor Kind: %d\n", clang_getCursorKind(cursor));
+
+  //clang_visitChildren( cursor, myvisitor, NULL );
+
+  prevcursor = clang_getNullCursor();
+
+  if ( clang_isReference( cursor.kind ) ) {
+    fprintf(stdout, "Initial check reveals isReference!\n");
+    cursor = clang_getCursorReferenced( cursor );
+    fprintf(stdout, "New Cursor Kind: %d\n", clang_getCursorKind(cursor));
+  }
+
+  switch( cursor.kind ) {
+  case CXCursor_DeclRefExpr:
+  case CXCursor_MemberRefExpr:
+    fprintf(stdout, "DECLREF EXPR!\n");
+    //cursor = clang_getCursorDefinition( cursor );
+    cursor = clang_getCursorReferenced( cursor );
+    break;
+
+  case CXCursor_CallExpr:
+    fprintf(stdout, "CALL EXPR!\n");
+    cursor = clang_getCursorReferenced( cursor );
+    break;
+
+  default:
+    break;
+  }
 
   loc = clang_getCursorLocation( cursor );
-
-  unsigned l, c;
   clang_getSpellingLocation( loc, &file, &l, &c, NULL );
 
-  CXString cxfname = clang_getFileName( file );
+  cxfname = clang_getFileName( file );
 
   lr.filename = clang_getCString( cxfname );
   lr.line = l;
   lr.column = c;
+
+
+  //cursor = clang_getCursorReferenced( cursor );
 
   return lr;
 }

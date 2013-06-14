@@ -254,12 +254,14 @@ void completion_doLocate(completion_Session *session, FILE *fp)
 
     /* get a copy of fresh source file */
     completion_readSourcefile(session, fp);
+    completion_reparseTranslationUnit(session);
 
     LocationResult loc = completion_locateAt(session, row, column);
 
-    fprintf(stdout, "%s\n", loc.filename);
-    fprintf(stdout, "%d\n", loc.line);
-    fprintf(stdout, "%d\n", loc.column);
+    fprintf(stdout, "LOCATE:\n");
+    fprintf(stdout, "file:%s\n", loc.filename);
+    fprintf(stdout, "line:%d\n", loc.line);
+    fprintf(stdout, "column:%d\n", loc.column);
 
     fprintf(stdout, "$"); 
     fflush(stdout);
