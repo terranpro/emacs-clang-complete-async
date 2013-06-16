@@ -98,6 +98,29 @@ completion_codeCompleteAt(
             &unsaved_files, 1, session->CompleteAtOptions);
 }
 
+int myvisitor(CXCursor c, CXCursor p, CXClientData d)
+{
+  printf("CursorKind\t%s\n",
+	 clang_getCString(clang_getCursorKindSpelling(c.kind)));
+  if ( c.kind == CXCursor_ClassTemplate ) {
+    c = clang_getCursorReferenced(c);
+    printf("CursorKind\t%s\n",
+	   clang_getCString(clang_getCursorKindSpelling(c.kind)));
+
+      CXSourceLocation loc;
+      loc = clang_getCursorLocation( c );
+      CXFile file;
+      unsigned line;
+      unsigned col;
+
+      clang_getSpellingLocation( loc, &file, &line, &col, NULL );
+      printf("File %s Line %d Col %d\n",
+	     clang_getCString( clang_getFileName(file) ), line, col);
+  }
+
+  return CXChildVisit_Recurse;
+}
+
 LocationResult
 completion_locateAt(completion_Session *session, int line, int column)
 {
@@ -119,6 +142,7 @@ completion_locateAt(completion_Session *session, int line, int column)
   loc = clang_getLocation( session->cx_tu, file, line, column);
 
   CXCursor cursor;
+  CXCursor defcursor;
   CXCursor prevcursor;
   CXString cxfname;
   unsigned l;
@@ -138,11 +162,35 @@ completion_locateAt(completion_Session *session, int line, int column)
   }
 
   switch( cursor.kind ) {
+  case CXCursor_TypedefDecl:
+    fprintf(stdout, "TYPEDEF DECL\n");
+    //clang_visitChildren( cursor, myvisitor,  NULL);
+    CXType type = clang_getTypedefDeclUnderlyingType(cursor);
+    cursor = clang_getTypeDeclaration(type);
+    break;
+
   case CXCursor_DeclRefExpr:
   case CXCursor_MemberRefExpr:
     fprintf(stdout, "DECLREF EXPR!\n");
     //cursor = clang_getCursorDefinition( cursor );
     cursor = clang_getCursorReferenced( cursor );
+    break;
+
+  case CXCursor_ClassTemplate:
+    fprintf(stdout, "CLASSTEMPLATE!\n");
+    //clang_visitChildren( cursor, myvisitor,  NULL);
+    defcursor = clang_getCursorDefinition( cursor );
+    //defcursor = clang_getSpecializedCursorTemplate( cursor );
+    /* defcursor =  */
+    /*   clang_getCursorDefinition(clang_getCursor(session->cx_tu,clang_getCursorLocation(clang_getCursorDefinition(cursor)))); */
+
+    //defcursor = clang_getCursorReferenced( cursor );
+    if (!clang_equalCursors(defcursor, clang_getNullCursor())) {
+      fprintf(stdout, "Found Definition!\n");
+      cursor = defcursor;
+    } else {
+      fprintf(stdout, "No Definition...\n");
+    }
     break;
 
   case CXCursor_CallExpr:

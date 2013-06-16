@@ -525,6 +525,7 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
     (ac-clang-parse-output ac-clang-saved-prefix)))
 
 (defun ac-clang-parse-location-results (proc)
+  "Returns a list containing the file, line, and column of the last LOCATE query."
   (with-current-buffer (process-buffer proc)
     (let ((input "LOCATE:
 file:/usr/include/stdio.h
@@ -538,8 +539,6 @@ column:12")
       ;(string-match regexp input)
       (goto-char (point-min))
       (when (re-search-forward regexp nil t)
-	(format "%s %s %s" (match-string 1) (match-string 2) (match-string 3)  )
-
 	(setq result 
 	      (list (match-string 1) 
 	       (string-to-number (match-string 2))
@@ -556,12 +555,11 @@ column:12")
          (ac-update))
         
 	(locate 
-	 ;(ac-clang-parse-location-results proc)
 	 (setq ac-clang-status 'idle)
 	 (let ((result (ac-clang-parse-location-results proc)))
-	  (ac-clang-goto-definition (car result) 
-				    (cadr result)
-				    (caddr result))))
+	   (ac-clang-goto-definition (car result) 
+				     (cadr result)
+				     (caddr result))))
 
         (otherwise
          (setq ac-clang-current-candidate (ac-clang-parse-completion-results proc))
@@ -639,7 +637,43 @@ column:12")
     (set-process-filter ac-clang-completion-process 'ac-clang-flymake-process-filter)
     (ac-clang-send-syntaxcheck-request ac-clang-completion-process)))
 
+(defvar ac-clang-location-ring (make-ring 20))
 
+(defun ac-clang-goto-definition (file line col)
+  "Similar in principle to `semantic-goto-definition'.  Invoked
+by `ac-clang-parse-location-results' and will jump to FILE at
+LINE and COL if it exists, storing the current location in
+`ac-clang-location-ring'."
+  (interactive "d")
+  (when (file-exists-p file)
+    (condition-case err
+       (progn
+	
+	 (ring-insert ac-clang-location-ring (point-marker))
+	 (let ((newbuf (find-file-noselect file)))
+	   (switch-to-buffer newbuf)
+	   (goto-char (point-min))
+	   (forward-line (1- line))
+	   (forward-char (1- col))))
+     (error
+      ;;if not found remove the tag saved in the ring  
+      (set-marker (ring-remove ac-clang-location-ring 0) nil nil)
+      (signal (car err) (cdr err))))))
+
+(defun ac-clang-goto-last-location ()             
+  "Pop and jump back to the last location stored by
+`ac-clang-goto-definition'."
+  (interactive)                                                    
+  (if (ring-empty-p ac-clang-location-ring)                   
+      (message "%s" "No more tags available")                      
+    (let* ((marker (ring-remove ac-clang-location-ring 0))    
+              (buff (marker-buffer marker))                        
+                 (pos (marker-position marker)))                   
+      (if (not buff)                                               
+            (message "Buffer has been deleted")                    
+        (switch-to-buffer buff)                                    
+        (goto-char pos))                                           
+      (set-marker marker nil nil))))
 
 (defun ac-clang-shutdown-process ()
   (if ac-clang-completion-process
