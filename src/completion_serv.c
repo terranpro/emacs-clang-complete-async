@@ -98,27 +98,112 @@ completion_codeCompleteAt(
             &unsaved_files, 1, session->CompleteAtOptions);
 }
 
+static void 
+print_LocationResult(CXCursor cursor, CXSourceLocation loc)
+{
+  CXFile cxfile;
+  unsigned l;
+  unsigned c;
+  CXString cxstrfile;
+  CXString cxstrcursor;
+
+  clang_getSpellingLocation( loc, &cxfile, &l, &c, NULL );
+
+  if ( clang_equalLocations( loc, clang_getNullLocation() ) )
+    return;
+
+  cxstrcursor = clang_getCursorKindSpelling( cursor.kind );
+  cxstrfile = clang_getFileName( cxfile );
+
+  fprintf(stdout, "LOCATE:\ndesc:%s\nfile:%s\nline:%d\ncolumn:%d\n", 
+	  clang_getCString( cxstrcursor ),
+	  clang_getCString( cxstrfile ),
+	  l,
+	  c);
+
+  clang_disposeString( cxstrfile );
+  clang_disposeString( cxstrcursor );
+}
+
 int myvisitor(CXCursor c, CXCursor p, CXClientData d)
 {
-  printf("CursorKind\t%s\n",
-	 clang_getCString(clang_getCursorKindSpelling(c.kind)));
-  if ( c.kind == CXCursor_ClassTemplate ) {
-    c = clang_getCursorReferenced(c);
-    printf("CursorKind\t%s\n",
-	   clang_getCString(clang_getCursorKindSpelling(c.kind)));
+  CXSourceLocation loc;
 
-      CXSourceLocation loc;
-      loc = clang_getCursorLocation( c );
-      CXFile file;
-      unsigned line;
-      unsigned col;
+  loc = clang_getCursorLocation( c );
+  print_LocationResult( c, loc );
 
-      clang_getSpellingLocation( loc, &file, &line, &col, NULL );
-      printf("File %s Line %d Col %d\n",
-	     clang_getCString( clang_getFileName(file) ), line, col);
-  }
+  clang_visitChildren( c, myvisitor, NULL );
 
-  return CXChildVisit_Recurse;
+  return CXChildVisit_Continue;
+}
+
+typedef struct {
+  CXCursor ccursor;
+  CXFile ccur_file;
+  int ccur_line;
+  int ccur_column;
+
+  CXFile orig_file;
+  int orig_line;
+  int orig_column;
+} ClosestCursor;
+
+void updateClosestCursor(ClosestCursor *cc, CXCursor c, CXFile file,
+			 unsigned line, unsigned col )
+{
+  cc->ccursor = c;
+  cc->ccur_file = file;
+  cc->ccur_line = line;
+  cc->ccur_column = col;
+}
+
+int closestCursorVistitor(CXCursor c, CXCursor p, CXClientData d)
+{
+  ClosestCursor *cc = (CXCursor *)d;
+  CXSourceLocation loc = clang_getCursorLocation( c );
+  CXFile file;
+  unsigned line;
+  unsigned col;
+
+  clang_getSpellingLocation( loc, &file, &line, &col, NULL );
+  print_LocationResult( c, loc );
+
+  if ( file != cc->orig_file )
+    return CXChildVisit_Continue;
+
+  if ( line <= cc->orig_line )
+    updateClosestCursor( cc, c, file, line, col );
+
+  /* else if ( l == cc->orig_line ) { */
+  /*   int odelta = abs( (int)cc->orig_column - (int)col ); */
+  /*   int cdelta = abs( (int) cc->ccur_column - (int)cc->orig_column ); */
+
+  /*   if ( odelta < cdelta  ) */
+  /*     updateClosestCursor( cc, c, line, col ); */
+  /* } */
+
+  else
+    return CXChildVisit_Break;
+
+  //  return CXChildVisit_Recurse;
+  return CXChildVisit_Continue;
+}
+
+LocationResult
+findClosestCursor(CXTranslationUnit tu, CXFile file, 
+		  int line, int column)
+{
+  LocationResult lr = { 0, 0, 0 };
+  CXCursor rootcursor = clang_getTranslationUnitCursor( tu );
+  ClosestCursor cc = { rootcursor, 1, 1, NULL, file, line, column };
+
+  clang_visitChildren( rootcursor, closestCursorVistitor, &cc );
+
+  lr.file = cc.ccur_file;
+  lr.line = cc.ccur_line;
+  lr.column = cc.ccur_column;
+
+  return lr;
 }
 
 LocationResult
@@ -127,19 +212,7 @@ completion_locateAt(completion_Session *session, int line, int column)
   CXSourceLocation loc;
   CXFile file = clang_getFile( session->cx_tu, 
 			       session->src_filename );
-  LocationResult lr;
-
-  fprintf(stdout, "Checking file %s line %d col %d\n",
-	  session->src_filename,
-	  line,
-	  column);
-
-  if (!file) {
-    fprintf(stdout, "DogBaby!\n");
-    return lr;
-  }
-
-  loc = clang_getLocation( session->cx_tu, file, line, column);
+  LocationResult lr = { 0, 0, 0 };
 
   CXCursor cursor;
   CXCursor defcursor;
@@ -148,43 +221,71 @@ completion_locateAt(completion_Session *session, int line, int column)
   unsigned l;
   unsigned c;
 
-  cursor = clang_getCursor( session->cx_tu, loc );
-  fprintf(stdout, "Cursor Kind: %d\n", clang_getCursorKind(cursor));
+  fprintf(stdout, "Checking file %s line %d col %d\n",
+	  session->src_filename,
+	  line,
+	  column);
 
+  if (!file) {
+    return lr;
+  }
+
+  loc = clang_getLocation( session->cx_tu, file, line, column);
+  cursor = clang_getCursor( session->cx_tu, loc );
+  print_LocationResult(cursor, loc);
+
+  if ( clang_Cursor_isNull( cursor ) ) {
+    fprintf(stdout, "Cursor is NULL\n");
+    return lr;
+  }
+
+  if ( cursor.kind >= CXCursor_FirstInvalid && 
+       cursor.kind <= CXCursor_LastInvalid ) {
+    fprintf(stdout, "InVALID Cursor! FINDING CLOSEST CURSOR\n");
+    return findClosestCursor( session->cx_tu, file, line, column );
+  }
+  
   //clang_visitChildren( cursor, myvisitor, NULL );
 
-  prevcursor = clang_getNullCursor();
-
-  if ( clang_isReference( cursor.kind ) ) {
-    fprintf(stdout, "Initial check reveals isReference!\n");
+  while ( clang_isReference( cursor.kind ) ) {
+    fprintf(stdout, "Check reveals cursor isReference!\n");
     cursor = clang_getCursorReferenced( cursor );
     fprintf(stdout, "New Cursor Kind: %d\n", clang_getCursorKind(cursor));
+  }
+  
+  if ( cursor.kind >= CXCursor_FirstRef && cursor.kind <= CXCursor_LastRef ) {
+    fprintf(stdout, "REFERENCE TYPE!\n");
+    cursor = clang_getCursorReferenced( cursor );
   }
 
   switch( cursor.kind ) {
   case CXCursor_TypedefDecl:
     fprintf(stdout, "TYPEDEF DECL\n");
-    //clang_visitChildren( cursor, myvisitor,  NULL);
-    CXType type = clang_getTypedefDeclUnderlyingType(cursor);
+    CXType type = clang_getCursorType( cursor );
     cursor = clang_getTypeDeclaration(type);
     break;
 
+  case CXCursor_MacroExpansion:
+    /* clang_visitChildren( cursor, myvisitor, NULL ); */
+    /* clang_getExpansionLocation( loc, &file, &l, &c, NULL ); */
+    /* loc = clang_getLocation( session->cx_tu, file, l, c ); */
+
+  case CXCursor_CallExpr:
   case CXCursor_DeclRefExpr:
   case CXCursor_MemberRefExpr:
-    fprintf(stdout, "DECLREF EXPR!\n");
-    //cursor = clang_getCursorDefinition( cursor );
+    prevcursor = cursor;
+
     cursor = clang_getCursorReferenced( cursor );
+    if ( clang_Cursor_isNull( cursor ) ) {
+      CXType type = clang_getCursorType( prevcursor );
+      cursor = clang_getTypeDeclaration(type);
+    }
+
     break;
 
   case CXCursor_ClassTemplate:
     fprintf(stdout, "CLASSTEMPLATE!\n");
-    //clang_visitChildren( cursor, myvisitor,  NULL);
     defcursor = clang_getCursorDefinition( cursor );
-    //defcursor = clang_getSpecializedCursorTemplate( cursor );
-    /* defcursor =  */
-    /*   clang_getCursorDefinition(clang_getCursor(session->cx_tu,clang_getCursorLocation(clang_getCursorDefinition(cursor)))); */
-
-    //defcursor = clang_getCursorReferenced( cursor );
     if (!clang_equalCursors(defcursor, clang_getNullCursor())) {
       fprintf(stdout, "Found Definition!\n");
       cursor = defcursor;
@@ -193,10 +294,12 @@ completion_locateAt(completion_Session *session, int line, int column)
     }
     break;
 
-  case CXCursor_CallExpr:
-    fprintf(stdout, "CALL EXPR!\n");
-    cursor = clang_getCursorReferenced( cursor );
-    break;
+  case CXCursor_InclusionDirective:
+    fprintf(stdout, "INCLUSION DIRECTIVE!\n");
+    lr.file = clang_getIncludedFile( cursor );
+    lr.line = 1;
+    lr.column = 1;
+    return lr;
 
   default:
     break;
@@ -205,14 +308,10 @@ completion_locateAt(completion_Session *session, int line, int column)
   loc = clang_getCursorLocation( cursor );
   clang_getSpellingLocation( loc, &file, &l, &c, NULL );
 
-  cxfname = clang_getFileName( file );
-
-  lr.filename = clang_getCString( cxfname );
+  
+  lr.file = file;
   lr.line = l;
   lr.column = c;
-
-
-  //cursor = clang_getCursorReferenced( cursor );
 
   return lr;
 }

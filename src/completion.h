@@ -31,7 +31,8 @@ typedef struct __completion_Session_struct
 
 /* COMPLETION SERVER DEFAULT SETTINGS */
 
-#define  DEFAULT_PARSE_OPTIONS       CXTranslationUnit_PrecompiledPreamble
+#define  DEFAULT_PARSE_OPTIONS       ( CXTranslationUnit_PrecompiledPreamble | CXTranslationUnit_DetailedPreprocessingRecord )
+//#define  DEFAULT_PARSE_OPTIONS       CXTranslationUnit_PrecompiledPreamble
 #define  DEFAULT_COMPLETEAT_OPTIONS  CXCodeComplete_IncludeMacros
 #define  INITIAL_SRC_BUFFER_SIZE     4096    /* 4KB */
 
@@ -69,7 +70,7 @@ CXCodeCompleteResults* completion_codeCompleteAt(
     completion_Session *session, int line, int column);
 
 typedef struct LocationResult {
-  char const *filename;
+  CXFile file;
   unsigned line;
   unsigned column;
 } LocationResult;
@@ -80,3 +81,23 @@ completion_locateAt(completion_Session *session, int line, int column);
 
 
 #endif /* _COMPLETION_SESSION_H_ */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

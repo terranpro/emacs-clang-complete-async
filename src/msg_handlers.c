@@ -257,14 +257,16 @@ void completion_doLocate(completion_Session *session, FILE *fp)
     completion_reparseTranslationUnit(session);
 
     LocationResult loc = completion_locateAt(session, row, column);
-
+    CXString cxfstr = clang_getFileName( loc.file );
     fprintf(stdout, "LOCATE:\n");
-    fprintf(stdout, "file:%s\n", loc.filename);
+    fprintf(stdout, "file:%s\n", clang_getCString( cxfstr ));
     fprintf(stdout, "line:%d\n", loc.line);
     fprintf(stdout, "column:%d\n", loc.column);
 
     fprintf(stdout, "$"); 
     fflush(stdout);
+
+    clang_disposeString( cxfstr );
 }
 
 /* When emacs buffer is killed, a SHUTDOWN message is sent automatically by a hook 
@@ -284,3 +286,9 @@ void completion_doShutdown(completion_Session *session, FILE *fp)
 
     exit(0);   /* terminate completion process */
 }
+
+
+
+
+
+

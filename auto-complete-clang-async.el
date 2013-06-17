@@ -439,6 +439,8 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 
 (defun ac-clang-send-location-request (&optional proc)
   (interactive)
+  (if (not (string= current-clang-file (buffer-file-name)))
+      (ac-clang-filechanged))
   (unless proc 
     (setq proc ac-clang-completion-process))
 
@@ -449,7 +451,7 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
   (save-restriction
     (widen)
     (setq ac-clang-status 'locate)
-    
+    (message "Locating...")
     (process-send-string proc "LOCATE\n")
     (process-send-string proc (ac-clang-create-position-string (- (point) (length ac-prefix))))
     (ac-clang-send-source-code proc)))
@@ -645,20 +647,31 @@ by `ac-clang-parse-location-results' and will jump to FILE at
 LINE and COL if it exists, storing the current location in
 `ac-clang-location-ring'."
   (interactive "d")
-  (when (file-exists-p file)
-    (condition-case err
-       (progn
-	
-	 (ring-insert ac-clang-location-ring (point-marker))
-	 (let ((newbuf (find-file-noselect file)))
-	   (switch-to-buffer newbuf)
-	   (goto-char (point-min))
-	   (forward-line (1- line))
-	   (forward-char (1- col))))
-     (error
-      ;;if not found remove the tag saved in the ring  
-      (set-marker (ring-remove ac-clang-location-ring 0) nil nil)
-      (signal (car err) (cdr err))))))
+  (cond ((file-exists-p file)
+	 (condition-case err
+	     (progn
+	       (ring-insert ac-clang-location-ring (point-marker))
+	       (message (format "Jumping to %s:%d:%d" file line col))
+	       (let* ((cur-ac-clang-cflags ac-clang-cflags)
+		      (update-cflags nil)
+		      (newbuf (or (get-file-buffer file)
+				  (progn 
+				    (setq update-cflags t)
+				    (find-file-noselect file)))))
+
+		 (switch-to-buffer newbuf)
+		 (goto-char (point-min))
+		 (forward-line (1- line))
+		 (forward-char (1- col))
+		 (when update-cflags
+		   (setq ac-clang-cflags cur-ac-clang-cflags)
+		   (ac-clang-update-cmdlineargs))))
+	   (error
+	    ;;if not found remove the tag saved in the ring  
+	    (set-marker (ring-remove ac-clang-location-ring 0) nil nil)
+	    (signal (car err) (cdr err)))))
+	(t
+	 (message "Clang LOCATE Failure!"))))
 
 (defun ac-clang-goto-last-location ()             
   "Pop and jump back to the last location stored by
