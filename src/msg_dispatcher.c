@@ -19,6 +19,7 @@ __command_dispatch_table[] =
     {"CMDLINEARGS",  completion_doCmdlineArgs},
     {"FILECHANGED",  completion_doFileChanged},
     {"SYNTAXCHECK",  completion_doSyntaxCheck},
+    {"PROJECT",      completion_doProject},
     {"LOCATE",       completion_doLocate},
     {"REPARSE",      completion_doReparse},
     {"SHUTDOWN",     completion_doShutdown}

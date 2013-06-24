@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
 #include "completion.h"
 
 
@@ -125,7 +126,8 @@ print_LocationResult(CXCursor cursor, CXSourceLocation loc)
   clang_disposeString( cxstrcursor );
 }
 
-int myvisitor(CXCursor c, CXCursor p, CXClientData d)
+enum CXChildVisitResult
+myvisitor(CXCursor c, CXCursor p, CXClientData d)
 {
   CXSourceLocation loc;
 
@@ -134,7 +136,8 @@ int myvisitor(CXCursor c, CXCursor p, CXClientData d)
 
   clang_visitChildren( c, myvisitor, NULL );
 
-  return CXChildVisit_Continue;
+  //return CXChildVisit_Continue;
+  return CXChildVisit_Recurse;
 }
 
 typedef struct {
@@ -157,9 +160,15 @@ void updateClosestCursor(ClosestCursor *cc, CXCursor c, CXFile file,
   cc->ccur_column = col;
 }
 
-int closestCursorVistitor(CXCursor c, CXCursor p, CXClientData d)
+void findRefsInFiles(CXCursor c, CXFile *files)
 {
-  ClosestCursor *cc = (CXCursor *)d;
+  
+}
+
+enum CXChildVisitResult
+closestCursorVistitor(CXCursor c, CXCursor p, CXClientData d)
+{
+  ClosestCursor *cc = (ClosestCursor *)d;
   CXSourceLocation loc = clang_getCursorLocation( c );
   CXFile file;
   unsigned line;
@@ -195,7 +204,7 @@ findClosestCursor(CXTranslationUnit tu, CXFile file,
 {
   LocationResult lr = { 0, 0, 0 };
   CXCursor rootcursor = clang_getTranslationUnitCursor( tu );
-  ClosestCursor cc = { rootcursor, 1, 1, NULL, file, line, column };
+  ClosestCursor cc = { rootcursor, NULL, 1, 1, file, line, column };
 
   clang_visitChildren( rootcursor, closestCursorVistitor, &cc );
 
@@ -258,10 +267,17 @@ completion_locateAt(completion_Session *session, int line, int column)
     cursor = clang_getCursorReferenced( cursor );
   }
 
+  CXType type;
   switch( cursor.kind ) {
+  case CXCursor_CompoundStmt:
+    fprintf(stdout, "COMPOUND STMT!\n");
+    clang_visitChildren( cursor, myvisitor, 0 );
+    return findClosestCursor( session->cx_tu, file, line, column );
+    break;
+
   case CXCursor_TypedefDecl:
     fprintf(stdout, "TYPEDEF DECL\n");
-    CXType type = clang_getCursorType( cursor );
+    type = clang_getCursorType( cursor );
     cursor = clang_getTypeDeclaration(type);
     break;
 
@@ -277,7 +293,7 @@ completion_locateAt(completion_Session *session, int line, int column)
 
     cursor = clang_getCursorReferenced( cursor );
     if ( clang_Cursor_isNull( cursor ) ) {
-      CXType type = clang_getCursorType( prevcursor );
+      type = clang_getCursorType( prevcursor );
       cursor = clang_getTypeDeclaration(type);
     }
 

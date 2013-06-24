@@ -437,6 +437,21 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
     (process-send-string proc (ac-clang-create-position-string (- (point) (length ac-prefix))))
     (ac-clang-send-source-code proc)))
 
+(defun ac-clang-send-project-request (&optional proc)
+  (interactive)
+  (unless proc 
+    (setq proc ac-clang-completion-process))
+
+  (process-send-string proc "PROJECT\nNEW\n")
+  (process-send-string proc "PROJECT\nOPTIONS\nPROJECTID:0\n")
+  (mapc
+   (lambda (arg)
+     (process-send-string proc (format "%s " arg)))
+   (ac-clang-build-complete-args))
+  (process-send-string "\n")
+
+  (process-send-string proc (format "PROJECT\nADD_SRC\n%s\n" (buffer-file-name))))
+
 (defun ac-clang-send-location-request (&optional proc)
   (interactive)
   (if (not (string= current-clang-file (buffer-file-name)))

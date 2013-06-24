@@ -241,6 +241,120 @@ void completion_doSyntaxCheck(completion_Session *session, FILE *fp)
     fprintf(stdout, "$"); fflush(stdout);    /* end of output */
 }
 
+static completion_Project projects[64];
+static int next_project = 0;
+
+void projectNew(completion_Project *prj)
+{
+  prj->index = clang_createIndex(0, 0);
+  prj->parsed = 0;
+  prj->active_tunit = -1;
+  prj->session = NULL;
+  prj->tunits = NULL;
+  prj->src_count = -1;
+  prj->src_filenames = NULL;
+}
+
+void projectOptions(completion_Project *prj, int argc, char **argv)
+{
+  prj->arg_count = argc;
+  prj->args = argv;
+}
+
+void projectAdd(completion_Project *prj, char const *src_file)
+{
+  if ( prj->src_count < 0 || prj->src_count % 4 == 0 ) {
+    ++prj->src_count;
+    char **old_srcs = prj->src_filenames;
+    prj->src_filenames = 
+      (char **) realloc( prj->src_filenames,
+			       sizeof(char *) * prj->src_count * 4);
+
+    CXTranslationUnit *old_tunits = prj->tunits;
+    prj->tunits = 
+      (CXTranslationUnit *)realloc(prj->tunits, 
+				   sizeof(CXTranslationUnit *) *
+				   prj->src_count * 4 );
+
+    if ( old_srcs != NULL) {
+      const char *src = old_srcs[0];
+      char *dst = prj->src_filenames[0];
+
+      CXTranslationUnit *srctu = &old_tunits[0];
+      CXTranslationUnit *dsttu = &prj->tunits[0];
+
+      while( src ) {
+	*dst = *src;
+	++dst;
+	++src;
+	(*dsttu) = (*srctu);
+	++dsttu;
+	++srctu;
+      }
+
+      dst = NULL;
+      dsttu = NULL;
+    }
+
+  }
+
+  prj->src_filenames[ prj->src_count ] = strdup( src_file );
+  
+  prj->tunits[ prj->src_count ] = 
+    clang_parseTranslationUnit(prj->index, 
+			       src_file, prj->args, prj->arg_count, 
+			       NULL, 0, DEFAULT_COMPLETEAT_OPTIONS);
+
+  prj->src_count++;
+}
+
+void completion_doProject(completion_Session *session, FILE *fp)
+{
+  int id;
+  char subcmd[512];
+  fgets(subcmd, sizeof(subcmd), fp);
+  fprintf(stdout, "SUBCMD = %s\n", subcmd);
+  if ( subcmd[ strlen(subcmd) - 1 ] == '\n' )
+    subcmd[ strlen(subcmd) - 1 ] = '\0';
+
+  if ( strcmp( subcmd, "ADD_SRC" ) == 0 )
+  {
+    fscanf(fp, "PROJECTID:%d", &id); __skip_the_rest(fp);
+    fgets(subcmd, sizeof(subcmd), fp);
+    projectAdd( &projects[ id ], subcmd );
+  }
+  else if ( strcmp(subcmd, "NEW") == 0 ) {
+    projectNew( &projects[next_project] );
+    fprintf(stdout, "PROJECTID:%d\n", next_project++);
+  }
+  else if ( strcmp(subcmd, "OPTIONS") == 0 ) {
+    fscanf(fp, "PROJECTID:%d", &id); __skip_the_rest(fp);
+    fgets(subcmd, sizeof(subcmd), fp);
+    fprintf(stdout, "OPTIONS = %s\n", subcmd);
+    int argc;
+    char **argv = (char **)malloc( sizeof(char *) * 1024 );
+    size_t curarg_index = 0;
+    char *curarg;
+    char *startstr = subcmd;
+
+    while( (curarg = strtok( startstr, " " )) != NULL ) {
+      startstr = NULL;
+      fprintf(stdout, "curarg = %s\n", curarg);
+      argv[curarg_index++] = curarg;
+    }
+
+    argc = curarg_index + 1;
+    projectOptions( &projects[ id ], argc, argv );
+  }
+  else {
+
+  }
+
+  fprintf(stdout, "$"); 
+  fflush(stdout);
+
+}
+
 /* Locate the definition (or declaration?!) of tag */
 void completion_doLocate(completion_Session *session, FILE *fp)
 {

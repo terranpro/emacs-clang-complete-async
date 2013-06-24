@@ -56,6 +56,7 @@ void completion_doCmdlineArgs(completion_Session *session, FILE *fp);  /* CMDLIN
 void completion_doFileChanged(completion_Session *session, FILE *fp);  /* FILECHANGED */
 void completion_doReparse(completion_Session *session, FILE *fp);      /* REPARSE */
 void completion_doSyntaxCheck(completion_Session *session, FILE *fp);  /* SYNTAXCHECK */
+void completion_doProject(completion_Session *session, FILE *fp); /* PROJECT */
 void completion_doLocate(completion_Session *session, FILE *fp); /* LOCATE */
 void completion_doShutdown(completion_Session *session, FILE *fp);     /* SHUTDOWN */
 
