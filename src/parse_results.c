@@ -32,7 +32,7 @@ completion_printCompletionHeadTerm( CXCompletionString completion_string,
         {
             /* We got it, just dump it to fp */
             ac_string = clang_getCompletionChunkText(completion_string, i_chunk);
-	    char *string = clang_getCString(ac_string);
+	    const char *string = clang_getCString(ac_string);
 
 	    //fprintf(fp, "COMPLETION: %s vs. %s\n", prefix, string);
 

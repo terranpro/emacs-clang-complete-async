@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stddef.h>
 #include <string.h>
 #include <limits.h>
 #include <unistd.h>
@@ -246,7 +247,7 @@ static int next_project = 0;
 
 void projectNew(completion_Project *prj)
 {
-  prj->index = clang_createIndex(0, 0);
+  prj->index = clang_createIndex(0, 1);
   prj->parsed = 0;
   prj->active_tunit = -1;
   prj->session = NULL;
@@ -264,26 +265,28 @@ void projectOptions(completion_Project *prj, int argc, char **argv)
 void projectAdd(completion_Project *prj, char const *src_file)
 {
   if ( prj->src_count < 0 || prj->src_count % 4 == 0 ) {
+    printf("realloc required! new size = %d\n",
+			 sizeof(char *) * prj->src_count * 4);
+    fflush(stdout);
     ++prj->src_count;
     char **old_srcs = prj->src_filenames;
     prj->src_filenames = 
-      (char **) realloc( prj->src_filenames,
-			       sizeof(char *) * prj->src_count * 4);
+      (char **) malloc( sizeof(char *) * (prj->src_count + 1) * 4);
 
     CXTranslationUnit *old_tunits = prj->tunits;
     prj->tunits = 
-      (CXTranslationUnit *)realloc(prj->tunits, 
-				   sizeof(CXTranslationUnit *) *
-				   prj->src_count * 4 );
+      (CXTranslationUnit *)malloc(sizeof(CXTranslationUnit) *
+				  prj->src_count * 4 );
 
     if ( old_srcs != NULL) {
-      const char *src = old_srcs[0];
-      char *dst = prj->src_filenames[0];
+      char **src = &old_srcs[0];
+      char **dst = &prj->src_filenames[0];
 
       CXTranslationUnit *srctu = &old_tunits[0];
+
       CXTranslationUnit *dsttu = &prj->tunits[0];
 
-      while( src ) {
+      while( *src ) {
 	*dst = *src;
 	++dst;
 	++src;
@@ -292,26 +295,158 @@ void projectAdd(completion_Project *prj, char const *src_file)
 	++srctu;
       }
 
-      dst = NULL;
-      dsttu = NULL;
+      *dst = NULL;
+      *dsttu = NULL;
     }
 
   }
 
   prj->src_filenames[ prj->src_count ] = strdup( src_file );
   
+  fprintf(stdout, "src = %s\ncount = %d\n", 
+	  prj->src_filenames[ prj->src_count ],
+	  prj->src_count);
+
+  printf("Making TU for file %s\n", prj->src_filenames[ prj->src_count ] );
+	 
   prj->tunits[ prj->src_count ] = 
-    clang_parseTranslationUnit(prj->index, 
-			       src_file, prj->args, prj->arg_count, 
-			       NULL, 0, DEFAULT_COMPLETEAT_OPTIONS);
+    clang_createTranslationUnitFromSourceFile(prj->index, prj->src_filenames[ prj->src_count], prj->arg_count, prj->args, 0, NULL);
+
+    /* clang_parseTranslationUnit(prj->index,  */
+    /* 			       src_file, prj->args, prj->arg_count,  */
+    /* 			       NULL, 0, DEFAULT_PARSE_OPTIONS); */
+
+  if ( prj->tunits[ prj->src_count ] == NULL ) {
+    printf("Translation unit NULL - failure!\n");
+    return;
+  }
+
+  int n = clang_getNumDiagnostics( prj->tunits[ prj->src_count ] );
+  printf("Num diagnostics = %d\n", n);
 
   prj->src_count++;
+}
+
+static void 
+print_LocationResult(CXCursor cursor, CXSourceLocation loc)
+{
+  CXFile cxfile;
+  unsigned l;
+  unsigned c;
+  CXString cxstrfile;
+  CXString cxstrcursor;
+
+  clang_getSpellingLocation( loc, &cxfile, &l, &c, NULL );
+
+  if ( clang_equalLocations( loc, clang_getNullLocation() ) ) {
+    printf("null cursor!\n");
+    return;
+  }
+
+  cxstrcursor = clang_getCursorKindSpelling( cursor.kind );
+  cxstrfile = clang_getFileName( cxfile );
+
+  fprintf(stdout,
+	  "%s\ndesc:%s\nfile:%s\nline:%d\ncolumn:%d\ndefinition:%s\n",
+	  "PRJ_LOCATE:",
+	  clang_getCString( cxstrcursor ),
+	  clang_getCString( cxstrfile ),
+	  l,
+	  c,
+	  clang_isCursorDefinition( cursor ) ? "true" : "false"
+	  );
+
+  clang_disposeString( cxstrfile );
+  clang_disposeString( cxstrcursor );
+}
+
+static size_t result_count = 0;
+static const max_result_count = 255;
+
+enum CXChildVisitResult
+usrmatcher(CXCursor c, CXCursor p, CXClientData d)
+{
+  CXString *usr = (CXString *)d;
+  CXString this_usr = clang_getCursorUSR( c );
+  enum CXChildVisitResult result = CXChildVisit_Recurse;
+
+  if ( strcmp( clang_getCString( this_usr ), clang_getCString( *usr )) == 0 ) {
+    CXString s = clang_getCursorSpelling( c );
+    printf("FOUND @ %s\n", clang_getCString( s ));
+    clang_disposeString( s );
+    CXSourceLocation loc = clang_getCursorLocation( c );
+    print_LocationResult( c, loc );
+    result = CXChildVisit_Break;
+    ++result_count;
+  }
+
+  if ( result_count >= max_result_count )
+    result = CXChildVisit_Break;
+
+  clang_disposeString( this_usr );
+  return CXChildVisit_Recurse;
+}
+
+void projectLocate(completion_Project *prj, int line, int column)
+{
+  CXCursor cursor;
+  CXSourceLocation loc;
+  ssize_t i = prj->active_tunit;
+
+  CXFile file = clang_getFile( prj->tunits[i], prj->src_filenames[i] );
+
+  CXString s = clang_getFileName( file );
+  printf("ART OF LOCATE @ %s %d, %d\n",
+	 clang_getCString(s),
+	 line, column);
+  clang_disposeString(s);
+  loc = clang_getLocation( prj->tunits[i], file, line, column);
+  cursor = clang_getCursor( prj->tunits[i], loc );
+
+  //print_LocationResult(cursor, loc);
+
+  while ( clang_isReference( cursor.kind ) ) {
+    fprintf(stdout, "Check reveals cursor isReference!\n");
+    cursor = clang_getCursorReferenced( cursor );
+    fprintf(stdout, "New Cursor Kind: %d\n", clang_getCursorKind(cursor));
+  }
+  
+  if ( cursor.kind >= CXCursor_FirstRef && cursor.kind <= CXCursor_LastRef ) {
+    fprintf(stdout, "REFERENCE TYPE!\n");
+    cursor = clang_getCursorReferenced( cursor );
+  }
+
+  CXCursor prevcursor = cursor;
+  CXType type;
+  if ( cursor.kind == CXCursor_DeclRefExpr ) { 
+    cursor = clang_getCursorReferenced( cursor );
+    if ( clang_Cursor_isNull( cursor ) ) {
+      type = clang_getCursorType( prevcursor );
+      cursor = clang_getTypeDeclaration(type);
+    }
+  }
+  //print_LocationResult(cursor, loc);
+
+  int tu_count = 0;
+  CXString cursor_usr = clang_getCursorUSR( cursor );
+  printf("Cursor USR Spelling: %s\n", clang_getCString( cursor_usr ));
+
+  result_count = 0;
+
+  while( prj->tunits[tu_count] != NULL ) {
+    CXCursor c = clang_getTranslationUnitCursor( prj->tunits[tu_count] );
+    //printf("Scanning file: %s\n", prj->src_filenames[ tu_count ] );
+    clang_visitChildren( c , usrmatcher, &cursor_usr );
+    ++tu_count;
+  }
+
+  clang_disposeString( cursor_usr );
 }
 
 void completion_doProject(completion_Session *session, FILE *fp)
 {
   int id;
-  char subcmd[512];
+  char subcmd[2048];
   fgets(subcmd, sizeof(subcmd), fp);
   fprintf(stdout, "SUBCMD = %s\n", subcmd);
   if ( subcmd[ strlen(subcmd) - 1 ] == '\n' )
@@ -320,7 +455,8 @@ void completion_doProject(completion_Session *session, FILE *fp)
   if ( strcmp( subcmd, "ADD_SRC" ) == 0 )
   {
     fscanf(fp, "PROJECTID:%d", &id); __skip_the_rest(fp);
-    fgets(subcmd, sizeof(subcmd), fp);
+    fscanf(fp, "%s", subcmd); __skip_the_rest(fp);
+    //fgets(subcmd, sizeof(subcmd), fp);
     projectAdd( &projects[ id ], subcmd );
   }
   else if ( strcmp(subcmd, "NEW") == 0 ) {
@@ -330,6 +466,9 @@ void completion_doProject(completion_Session *session, FILE *fp)
   else if ( strcmp(subcmd, "OPTIONS") == 0 ) {
     fscanf(fp, "PROJECTID:%d", &id); __skip_the_rest(fp);
     fgets(subcmd, sizeof(subcmd), fp);
+
+    subcmd[ strlen(subcmd) - 1 ] = '\0';
+
     fprintf(stdout, "OPTIONS = %s\n", subcmd);
     int argc;
     char **argv = (char **)malloc( sizeof(char *) * 1024 );
@@ -340,11 +479,39 @@ void completion_doProject(completion_Session *session, FILE *fp)
     while( (curarg = strtok( startstr, " " )) != NULL ) {
       startstr = NULL;
       fprintf(stdout, "curarg = %s\n", curarg);
-      argv[curarg_index++] = curarg;
+      argv[curarg_index++] = strdup( curarg );
     }
 
-    argc = curarg_index + 1;
+    //argv[curarg_index] = NULL;
+    argc = curarg_index;
+
     projectOptions( &projects[ id ], argc, argv );
+  }
+  else if ( strcmp(subcmd, "LOCATE") == 0 ) {
+    int row;
+    int column;
+    char prefix[512];
+
+    fscanf(fp, "PROJECTID:%d", &id); __skip_the_rest(fp);
+    fscanf(fp, "src:%s", subcmd); __skip_the_rest(fp);
+    fscanf(fp, "row:%d",    &row);    __skip_the_rest(fp);
+    fscanf(fp, "column:%d", &column); __skip_the_rest(fp);
+    fscanf(fp, "prefix:"); 
+    fgets(prefix, sizeof(prefix), fp);
+
+    printf("src = %s\n", subcmd);
+    int x = 0;
+    while( projects[id].src_filenames[x] &&  
+	   strcmp( projects[id].src_filenames[x], subcmd ) != 0 ) {
+      printf("comparing %s to %s\n", projects[id].src_filenames[x], subcmd);
+      x++;
+    }
+    printf("x = %d\n", x);
+    if ( x < projects[id].src_count ) {
+      projects[id].active_tunit = x;
+      projectLocate( &projects[ id ], row, column );
+    }
+
   }
   else {
 
@@ -370,7 +537,9 @@ void completion_doLocate(completion_Session *session, FILE *fp)
     completion_readSourcefile(session, fp);
     completion_reparseTranslationUnit(session);
 
-    LocationResult loc = completion_locateAt(session, row, column);
+    LocationResult loc = completion_locateAt(session->cx_tu, 
+					     session->src_filename,
+					     row, column);
     CXString cxfstr = clang_getFileName( loc.file );
     fprintf(stdout, "LOCATE:\n");
     fprintf(stdout, "file:%s\n", clang_getCString( cxfstr ));

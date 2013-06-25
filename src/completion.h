@@ -89,7 +89,9 @@ typedef struct LocationResult {
 } LocationResult;
 
 LocationResult
-completion_locateAt(completion_Session *session, int line, int column);
+//completion_locateAt(completion_Session *session, int line, int column);
+completion_locateAt(CXTranslationUnit tu, const char *src_file, 
+		    int line, int column);
 
 
 

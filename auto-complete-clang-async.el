@@ -437,6 +437,34 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
     (process-send-string proc (ac-clang-create-position-string (- (point) (length ac-prefix))))
     (ac-clang-send-source-code proc)))
 
+(defvar-local ac-clang-project-srcs nil)
+
+(defun ac-clang-project-add-srcs (&optional proc)
+  (interactive)
+  (when ac-clang-project-srcs
+    (unless proc 
+      (setq proc ac-clang-completion-process))
+
+    (mapcar '(lambda (src)
+	       (process-send-string 
+		proc 
+		(format "PROJECT\nADD_SRC\nPROJECTID:%d\n%s\n" 0 src)))
+	    ac-clang-project-srcs)))
+
+(defun ac-clang-project-locate (&optional proc)
+  (interactive)
+  (unless proc 
+    (setq proc ac-clang-completion-process))
+
+  (setq ac-clang-status 'prj-locate)
+  (with-current-buffer (process-buffer proc)
+    (erase-buffer))
+  (process-send-string proc "PROJECT\nLOCATE\nPROJECTID:0\n")
+  (process-send-string proc (format "src:%s\n" (buffer-file-name)))
+  (process-send-string 
+   proc 
+   (ac-clang-create-position-string (- (point) (length ac-prefix)))))
+
 (defun ac-clang-send-project-request (&optional proc)
   (interactive)
   (unless proc 
@@ -448,9 +476,17 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
    (lambda (arg)
      (process-send-string proc (format "%s " arg)))
    (ac-clang-build-complete-args))
-  (process-send-string "\n")
+  (process-send-string proc "\n")
 
-  (process-send-string proc (format "PROJECT\nADD_SRC\n%s\n" (buffer-file-name))))
+  ;(process-send-string proc (format "PROJECT\nADD_SRC\nPROJECTID:%d\n%s\n" 0 (buffer-file-name)))
+  )
+
+(defun ac-clang-project-testing ()
+  (interactive)
+  (ac-clang-relaunch-completion-process)
+  (ac-clang-send-project-request)
+  (ac-clang-project-add-srcs)
+  (ac-clang-project-locate))
 
 (defun ac-clang-send-location-request (&optional proc)
   (interactive)
@@ -544,16 +580,11 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 (defun ac-clang-parse-location-results (proc)
   "Returns a list containing the file, line, and column of the last LOCATE query."
   (with-current-buffer (process-buffer proc)
-    (let ((input "LOCATE:
-file:/usr/include/stdio.h
-line:10
-column:12")
-	  (result)
+    (let ((result)
 	  (regexp (rx "LOCATE:" (zero-or-more not-newline) ?\n
 		      "file:" (group (one-or-more (not (any ?\n)))) ?\n
 		      "line:" (group (one-or-more (not (any ?\n)))) ?\n
 		      "column:" (group (one-or-more (not (any ?\n)))))))
-      ;(string-match regexp input)
       (goto-char (point-min))
       (when (re-search-forward regexp nil t)
 	(setq result 
@@ -561,6 +592,29 @@ column:12")
 	       (string-to-number (match-string 2))
 	       (string-to-number (match-string 3)))))
       result)))
+
+(defun ac-clang-project-locate-display-results (proc)
+  (with-current-buffer (process-buffer proc)
+    (let ((result)
+	  (regexp (rx "PRJ_LOCATE:" (zero-or-more not-newline) ?\n
+		      "desc:" (group (one-or-more (not (any ?\n)))) ?\n
+		      "file:" (group (one-or-more (not (any ?\n)))) ?\n
+		      "line:" (group (one-or-more (not (any ?\n)))) ?\n
+		      "column:" (group (one-or-more (not (any ?\n)))) ?\n
+		      "definition:" (group (one-or-more (not (any ?\n)))))))
+      (goto-char (point-min))
+      (while (re-search-forward regexp nil t)
+	(setq result
+	      (append
+	       result
+	       (list 
+		(list (match-string 1)
+		      (match-string 2)
+		      (string-to-number (match-string 3))
+		      (string-to-number (match-string 4))
+		      (match-string 5))))))
+      (pp (delete-dups result)))))
+
 
 (defun ac-clang-filter-output (proc string)
   (ac-clang-append-process-output-to-process-buffer proc string)
@@ -577,6 +631,10 @@ column:12")
 	   (ac-clang-goto-definition (car result) 
 				     (cadr result)
 				     (caddr result))))
+
+	(prj-locate 
+	 (setq ac-clang-status 'idle)
+	 (ac-clang-project-locate-display-results proc))
 
         (otherwise
          (setq ac-clang-current-candidate (ac-clang-parse-completion-results proc))

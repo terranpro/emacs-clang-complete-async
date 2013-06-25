@@ -216,11 +216,13 @@ findClosestCursor(CXTranslationUnit tu, CXFile file,
 }
 
 LocationResult
-completion_locateAt(completion_Session *session, int line, int column)
+//completion_locateAt(completion_Session *session, int line, int column)
+completion_locateAt(CXTranslationUnit tu, const char *src_filename, 
+		    int line, int column)
 {
   CXSourceLocation loc;
-  CXFile file = clang_getFile( session->cx_tu, 
-			       session->src_filename );
+  CXFile file = clang_getFile( tu, 
+			       src_filename );
   LocationResult lr = { 0, 0, 0 };
 
   CXCursor cursor;
@@ -231,7 +233,7 @@ completion_locateAt(completion_Session *session, int line, int column)
   unsigned c;
 
   fprintf(stdout, "Checking file %s line %d col %d\n",
-	  session->src_filename,
+	  src_filename,
 	  line,
 	  column);
 
@@ -239,8 +241,8 @@ completion_locateAt(completion_Session *session, int line, int column)
     return lr;
   }
 
-  loc = clang_getLocation( session->cx_tu, file, line, column);
-  cursor = clang_getCursor( session->cx_tu, loc );
+  loc = clang_getLocation( tu, file, line, column);
+  cursor = clang_getCursor( tu, loc );
   print_LocationResult(cursor, loc);
 
   if ( clang_Cursor_isNull( cursor ) ) {
@@ -251,7 +253,7 @@ completion_locateAt(completion_Session *session, int line, int column)
   if ( cursor.kind >= CXCursor_FirstInvalid && 
        cursor.kind <= CXCursor_LastInvalid ) {
     fprintf(stdout, "InVALID Cursor! FINDING CLOSEST CURSOR\n");
-    return findClosestCursor( session->cx_tu, file, line, column );
+    return findClosestCursor( tu, file, line, column );
   }
   
   //clang_visitChildren( cursor, myvisitor, NULL );
@@ -272,7 +274,7 @@ completion_locateAt(completion_Session *session, int line, int column)
   case CXCursor_CompoundStmt:
     fprintf(stdout, "COMPOUND STMT!\n");
     clang_visitChildren( cursor, myvisitor, 0 );
-    return findClosestCursor( session->cx_tu, file, line, column );
+    return findClosestCursor( tu, file, line, column );
     break;
 
   case CXCursor_TypedefDecl:
@@ -284,7 +286,7 @@ completion_locateAt(completion_Session *session, int line, int column)
   case CXCursor_MacroExpansion:
     /* clang_visitChildren( cursor, myvisitor, NULL ); */
     /* clang_getExpansionLocation( loc, &file, &l, &c, NULL ); */
-    /* loc = clang_getLocation( session->cx_tu, file, l, c ); */
+    /* loc = clang_getLocation( tu, file, l, c ); */
 
   case CXCursor_CallExpr:
   case CXCursor_DeclRefExpr:
