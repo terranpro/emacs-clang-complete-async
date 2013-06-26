@@ -58,6 +58,15 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
   :type '(repeat (string :tag "Argument" "")))
 (make-variable-buffer-local 'ac-clang-cflags)
 
+(defvar ac-clang-project-srcs nil)
+(make-variable-buffer-local 'ac-clang-project-srcs)
+
+(defvar ac-clang-project-id nil)
+(make-variable-buffer-local 'ac-clang-project-id)
+
+(defvar ac-clang-project-directory nil)
+(make-variable-buffer-local 'ac-clang-project-directory)
+
 (defun ac-clang-set-cflags ()
   "Set `ac-clang-cflags' interactively."
   (interactive)
@@ -437,7 +446,19 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
     (process-send-string proc (ac-clang-create-position-string (- (point) (length ac-prefix))))
     (ac-clang-send-source-code proc)))
 
-(defvar-local ac-clang-project-srcs nil)
+(defun ac-clang-project-add-src (proc src)
+  (with-current-buffer (process-buffer proc)
+    (erase-buffer))
+
+  (message (format "Adding %s to Clang Project..." src))
+
+  (with-current-buffer (get-file-buffer current-clang-file)
+   (process-send-string 
+    proc 
+    (format "PROJECT\nADD_SRC\nPROJECTID:%d\n%s\n" 
+	    ac-clang-project-id src))))
+
+(defvar ac-clang-project-srcs-queue nil)
 
 (defun ac-clang-project-add-srcs (&optional proc)
   (interactive)
@@ -445,48 +466,78 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
     (unless proc 
       (setq proc ac-clang-completion-process))
 
-    (mapcar '(lambda (src)
-	       (process-send-string 
-		proc 
-		(format "PROJECT\nADD_SRC\nPROJECTID:%d\n%s\n" 0 src)))
-	    ac-clang-project-srcs)))
+    (setq ac-clang-status 'prj-srcs)
+    (setq ac-clang-project-srcs-queue ac-clang-project-srcs)
+    (ac-clang-project-add-src proc (pop ac-clang-project-srcs-queue))))
 
 (defun ac-clang-project-locate (&optional proc)
   (interactive)
   (unless proc 
     (setq proc ac-clang-completion-process))
 
+  (setq current-clang-file (buffer-file-name))
+
   (setq ac-clang-status 'prj-locate)
   (with-current-buffer (process-buffer proc)
     (erase-buffer))
-  (process-send-string proc "PROJECT\nLOCATE\nPROJECTID:0\n")
+  (process-send-string proc (format "PROJECT\nLOCATE\nPROJECTID:%d\n" 
+				    ac-clang-project-id))
   (process-send-string proc (format "src:%s\n" (buffer-file-name)))
   (process-send-string 
    proc 
    (ac-clang-create-position-string (- (point) (length ac-prefix)))))
 
-(defun ac-clang-send-project-request (&optional proc)
+(defun ac-clang-project-find-id (&optional proc)
   (interactive)
   (unless proc 
     (setq proc ac-clang-completion-process))
 
-  (process-send-string proc "PROJECT\nNEW\n")
-  (process-send-string proc "PROJECT\nOPTIONS\nPROJECTID:0\n")
+  (message "Finding ID...")
+
+  (setq current-clang-file (buffer-file-name))
+  (setq ac-clang-status 'prj-id)
+  (with-current-buffer (process-buffer proc)
+    (erase-buffer))
+  (process-send-string 
+   proc 
+   (format "PROJECT\nFIND_ID\n%s\n" current-clang-file)))
+
+(defun ac-clang-project-new (&optional proc)
+  (interactive)
+  (unless proc 
+    (setq proc ac-clang-completion-process))
+
+  (message "Creating New Clang Project")
+
+  (setq current-clang-file (buffer-file-name))
+  (setq ac-clang-status 'prj-id)
+  (with-current-buffer (process-buffer proc)
+    (erase-buffer))
+  (process-send-string proc "PROJECT\nNEW\n"))
+
+(defun ac-clang-project-send-options (&optional proc)
+  (interactive)
+  (unless proc 
+    (setq proc ac-clang-completion-process))
+
+  (message "Sending Options...")
+
+  (process-send-string 
+   proc 
+   (format "PROJECT\nOPTIONS\nPROJECTID:%d\n" ac-clang-project-id))
+
   (mapc
    (lambda (arg)
      (process-send-string proc (format "%s " arg)))
    (ac-clang-build-complete-args))
-  (process-send-string proc "\n")
-
-  ;(process-send-string proc (format "PROJECT\nADD_SRC\nPROJECTID:%d\n%s\n" 0 (buffer-file-name)))
-  )
+  (process-send-string proc "\n"))
 
 (defun ac-clang-project-testing ()
   (interactive)
   (ac-clang-relaunch-completion-process)
-  (ac-clang-send-project-request)
-  (ac-clang-project-add-srcs)
-  (ac-clang-project-locate))
+  (ac-clang-project-new)
+  (ac-clang-project-send-options)
+  (ac-clang-project-add-srcs))
 
 (defun ac-clang-send-location-request (&optional proc)
   (interactive)
@@ -577,6 +628,22 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
   (with-current-buffer (process-buffer proc)
     (ac-clang-parse-output ac-clang-saved-prefix)))
 
+(defun ac-clang-project-new-parse-result (proc)
+  (with-current-buffer (get-file-buffer current-clang-file)
+    (setq ac-clang-project-id 
+	  (with-current-buffer (process-buffer proc)
+	    (let ((result)
+		  (regexp (rx "PROJECTID:"
+			      (group (one-or-more (not (any ?\n)))) ?\n)))
+	      (goto-char (point-min))
+	      (when (re-search-forward regexp nil t)
+		(string-to-number (match-string 1))))))
+    ;; TODO incase shit happens w/prj find
+    ;; (if (< ac-clang-project-id 0)
+    ;; 	(ac-clang-project-new proc))
+
+))
+
 (defun ac-clang-parse-location-results (proc)
   "Returns a list containing the file, line, and column of the last LOCATE query."
   (with-current-buffer (process-buffer proc)
@@ -613,7 +680,14 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 		      (string-to-number (match-string 3))
 		      (string-to-number (match-string 4))
 		      (match-string 5))))))
-      (pp (delete-dups result)))))
+
+      (setq result 
+	    (sort result #'(lambda (a b)
+			     (if (string= (nth 4 a) "true")
+				 t
+			       nil))))
+      (pp (delete-dups result))
+      (delete-dups result))))
 
 
 (defun ac-clang-filter-output (proc string)
@@ -632,9 +706,27 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 				     (cadr result)
 				     (caddr result))))
 
+	(prj-id 
+	 (setq ac-clang-status 'idle)
+	 (ac-clang-project-new-parse-result proc))
+
 	(prj-locate 
 	 (setq ac-clang-status 'idle)
-	 (ac-clang-project-locate-display-results proc))
+	 (let ((result (ac-clang-project-locate-display-results proc)))
+	   (when (car result)
+	     (let ((file (nth 1 (car result)))
+		   (line (nth 2 (car result)))
+		   (col  (nth 3 (car result))))
+	       (ac-clang-goto-definition file line col)))))
+
+	(prj-srcs 
+	 (let ((next-src (pop ac-clang-project-srcs-queue)))
+	   (if next-src 
+	       (ac-clang-project-add-src proc next-src)
+	     (setq ac-clang-status 'idle))))
+
+	(prj-ignore 
+	 (setq ac-clang-status 'idle))
 
         (otherwise
          (setq ac-clang-current-candidate (ac-clang-parse-completion-results proc))
@@ -643,7 +735,6 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
          (ac-start :force-init t)
          (ac-update)
          (setq ac-clang-status 'idle)))))
-
 
 (defun ac-clang-candidate ()
   (case ac-clang-status
