@@ -452,6 +452,7 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 
   (message (format "Adding %s to Clang Project..." src))
 
+  (setq ac-clang-status 'prj-srcs)
   (with-current-buffer (get-file-buffer current-clang-file)
    (process-send-string 
     proc 
@@ -466,7 +467,6 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
     (unless proc 
       (setq proc ac-clang-completion-process))
 
-    (setq ac-clang-status 'prj-srcs)
     (setq ac-clang-project-srcs-queue ac-clang-project-srcs)
     (ac-clang-project-add-src proc (pop ac-clang-project-srcs-queue))))
 
@@ -480,6 +480,7 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
   (setq ac-clang-status 'prj-locate)
   (with-current-buffer (process-buffer proc)
     (erase-buffer))
+
   (process-send-string proc (format "PROJECT\nLOCATE\nPROJECTID:%d\n" 
 				    ac-clang-project-id))
   (process-send-string proc (format "src:%s\n" (buffer-file-name)))
@@ -817,6 +818,7 @@ LINE and COL if it exists, storing the current location in
 	       (ring-insert ac-clang-location-ring (point-marker))
 	       (message (format "Jumping to %s:%d:%d" file line col))
 	       (let* ((cur-ac-clang-cflags ac-clang-cflags)
+		      (cur-ac-clang-project-id ac-clang-project-id)
 		      (update-cflags nil)
 		      (newbuf (or (get-file-buffer file)
 				  (progn 
@@ -829,6 +831,7 @@ LINE and COL if it exists, storing the current location in
 		 (forward-char (1- col))
 		 (when update-cflags
 		   (setq ac-clang-cflags cur-ac-clang-cflags)
+		   (setq ac-clang-project-id cur-ac-clang-project-id)
 		   (ac-clang-update-cmdlineargs))))
 	   (error
 	    ;;if not found remove the tag saved in the ring  

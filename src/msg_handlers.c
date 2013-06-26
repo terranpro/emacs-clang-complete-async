@@ -449,6 +449,9 @@ static void locate_declrefexpr(completion_Project *prj, CXCursor cursor)
     cursor = clang_getTypeDeclaration(type);
   }
 
+  printf("declref CHECKMARK!\n");
+  fflush(stdout);
+
   CXSourceLocation loc =
     clang_getCursorLocation( cursor );
 
@@ -459,13 +462,18 @@ static void locate_declrefexpr(completion_Project *prj, CXCursor cursor)
   printf("Cursor USR Spelling: %s\n", clang_getCString( cursor_usr ));
 
   result_count = 0;
+  fflush(stdout);
 
   while( prj->tunits[tu_count] != NULL ) {
     CXCursor c = clang_getTranslationUnitCursor( prj->tunits[tu_count] );
-    //printf("Scanning file: %s\n", prj->src_filenames[ tu_count ] );
+    printf("Scanning file: %s\n", prj->src_filenames[ tu_count ] );
+    fflush(stdout);
     clang_visitChildren( c , usrmatcher, &cursor_usr );
     ++tu_count;
   }
+
+  printf("declref FIN\n");
+  fflush(stdout);
 
   clang_disposeString( cursor_usr );
 }
@@ -527,6 +535,13 @@ static void locate_classdecl(completion_Project *prj, CXCursor cursor)
   }
 
   clang_disposeString( cursor_usr );
+}
+
+static void locate_typedefdecl(completion_Project *prj, CXCursor cursor)
+{
+  CXType type = clang_getCursorType( cursor );
+  cursor = clang_getTypeDeclaration(type);
+  print_LocationResult( cursor, clang_getCursorLocation(cursor) );
 }
 
 enum CXChildVisitResult
@@ -606,6 +621,10 @@ void locate_cursorDispatch(completion_Project *prj, CXCursor cursor)
     locate_include( prj , cursor );
     break;
 
+  case CXCursor_TypedefDecl:
+    locate_typedefdecl( prj, cursor );
+    break;
+
   case CXCursor_CallExpr:
   case CXCursor_DeclRefExpr:
     locate_declrefexpr( prj, cursor );
@@ -664,6 +683,8 @@ void projectLocate(completion_Project *prj, int line, int column)
   clang_disposeString(s);
 
   print_LocationResult(cursor, loc);
+
+  fflush(stdout);
 
   while ( clang_isReference( cursor.kind ) ) {
     fprintf(stdout, "Check reveals cursor isReference!\n");
@@ -743,13 +764,22 @@ void completion_doProject(completion_Session *session, FILE *fp)
     printf("src = %s\n", subcmd);
     int x = 0;
 
-    while( projects[id].src_count > 0 && 
+    fflush(stdout);
+
+    printf("x = %d prj_id = %d src_count = %d\n", x, id, projects[id].src_count);
+    fflush(stdout);
+
+    while( projects[id].src_count > 0 &&
+	   x < projects[id].src_count &&
 	   projects[id].src_filenames[x] &&  
 	   strcmp( projects[id].src_filenames[x], subcmd ) != 0 ) {
       printf("comparing %s to %s\n", projects[id].src_filenames[x], subcmd);
+      fflush(stdout);
       x++;
     }
-    printf("x = %d\n", x);
+    printf("x = %d prj_id = %d src_count = %d\n", x, id, projects[id].src_count);
+    fflush(stdout);
+
     if ( x < projects[id].src_count ) {
       projects[id].active_tunit = x;
       projectLocate( &projects[ id ], row, column );
