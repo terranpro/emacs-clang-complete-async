@@ -402,7 +402,7 @@ print_LocationResult(CXCursor cursor, CXSourceLocation loc)
 }
 
 static size_t result_count = 0;
-static const max_result_count = 255;
+static const size_t max_result_count = 255;
 
 enum CXChildVisitResult
 usrmatcher(CXCursor c, CXCursor p, CXClientData d)
@@ -419,6 +419,11 @@ usrmatcher(CXCursor c, CXCursor p, CXClientData d)
     print_LocationResult( c, loc );
     result = CXChildVisit_Continue;
     ++result_count;
+  } else {
+    printf("FISHED!\n");
+    CXSourceLocation loc = clang_getCursorLocation( c );
+    print_LocationResult( c, loc );
+    fflush(stdout);
   }
 
   if ( result_count >= max_result_count )
@@ -468,7 +473,10 @@ static void locate_declrefexpr(completion_Project *prj, CXCursor cursor)
     CXCursor c = clang_getTranslationUnitCursor( prj->tunits[tu_count] );
     printf("Scanning file: %s\n", prj->src_filenames[ tu_count ] );
     fflush(stdout);
-    clang_visitChildren( c , usrmatcher, &cursor_usr );
+
+    if (!clang_Cursor_isNull( c ) )
+      clang_visitChildren( c , usrmatcher, &cursor_usr );
+
     ++tu_count;
   }
 
@@ -552,13 +560,13 @@ virtualmatcher(CXCursor c, CXCursor p, CXClientData d)
     return CXChildVisit_Recurse;
 
   CXCursor *overrides = NULL;
-  int num_overrides;
+  unsigned num_overrides;
   clang_getOverriddenCursors( c, &overrides, &num_overrides );
 
   CXCursor *orig_cursor = (CXCursor *)d;
   CXString orig_spelling = clang_getCursorSpelling( *orig_cursor );
 
-  int override = 0;
+  unsigned override = 0;
   for ( ; override < num_overrides; ++override ) {
     fprintf(stdout, "Comparing cursors: %s and %s\n",
 	    clang_getCString( orig_spelling ),
@@ -721,8 +729,8 @@ void completion_doProject(completion_Session *session, FILE *fp)
     fprintf(stdout, "PROJECTID:%d\n", next_project++);
   }
   else if ( strcmp(subcmd, "FIND_ID") == 0 ) {
-    fscanf(fp, "%s", &subcmd); __skip_the_rest(fp);
-    id = projectFindId( &subcmd );
+    fscanf(fp, "%s", subcmd); __skip_the_rest(fp);
+    id = projectFindId( subcmd );
     fprintf(stdout, "PROJECTID:%d\n", id);
   }
   else if ( strcmp(subcmd, "OPTIONS") == 0 ) {
