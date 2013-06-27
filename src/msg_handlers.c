@@ -422,8 +422,10 @@ usrmatcher(CXCursor c, CXCursor p, CXClientData d)
     CXString s = clang_getCursorSpelling( c );
     printf("FOUND @ %s\n", clang_getCString( s ));
     clang_disposeString( s );
+
     CXSourceLocation loc = clang_getCursorLocation( c );
     print_LocationResult( c, loc );
+
     result = CXChildVisit_Continue;
     ++result_count;
   } else {
@@ -437,6 +439,7 @@ usrmatcher(CXCursor c, CXCursor p, CXClientData d)
     result = CXChildVisit_Break;
 
   clang_disposeString( this_usr );
+  
   return result;
 }
 
@@ -463,9 +466,6 @@ static void locate_declrefexpr(completion_Project *prj, CXCursor cursor)
     cursor = clang_getTypeDeclaration(type);
   }
 
-  printf("declref CHECKMARK!\n");
-  fflush(stdout);
-
   CXSourceLocation loc =
     clang_getCursorLocation( cursor );
 
@@ -478,12 +478,10 @@ static void locate_declrefexpr(completion_Project *prj, CXCursor cursor)
     printf("Cursor USR Spelling: %s\n", clang_getCString( cursor_usr ));
 
     result_count = 0;
-    fflush(stdout);
 
-    while( prj->tunits[tu_count] != NULL ) {
+    while( tu_count < prj->src_count && prj->tunits[tu_count] != NULL ) {
       CXCursor c = clang_getTranslationUnitCursor( prj->tunits[tu_count] );
       printf("Scanning file: %s\n", prj->src_filenames[ tu_count ] );
-      fflush(stdout);
 
       if (!clang_Cursor_isNull( c ) )
 	clang_visitChildren( c , usrmatcher, &cursor_usr );
@@ -491,8 +489,6 @@ static void locate_declrefexpr(completion_Project *prj, CXCursor cursor)
       ++tu_count;
     }
   }
-  printf("declref FIN\n");
-  fflush(stdout);
 
   clang_disposeString( cursor_usr );
 }

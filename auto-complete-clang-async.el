@@ -674,10 +674,6 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 	(narrow-to-region start stop)
 	(buffer-string)))))
 
-(ac-clang-project-locate-preview-src "/usr/local/include/clang-c/Index.h"
-				     2260
-				     28)
-
 (defvar ac-clang-project-locate-menu nil)
 (defvar ac-clang-project-locate-menu-doc nil)
 
@@ -694,16 +690,25 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 	       (move-to-column 0)
 	       (point)))
 	 (max-width (window-width))
-	 (width (/ max-width 2))
-	 (height 30)
-	 (menu (popup-create pt width height
+	 (doc-filled (popup-fill-string doc nil max-width 'left))
+	 (width (min max-width (car doc-filled)))
+	 (height (min 30 (length (cdr doc-filled))))
+	 (row (line-number-at-pos pt))
+	 (direction (popup-calculate-direction height row))
+	 (top (+ (max height (length (cdr doc-filled))) (popup-current-height parentmenu) 1))
+	 (finalpt (if (eq direction -1) (progn (vertical-motion (- top)) (point)) pt))
+	 (menu (popup-create finalpt width height
 			     :face 'popup-tip-face
 			     :around nil
 			     :scroll-bar t
-			     :parent parentmenu
-			     :parent-offset (popup-offset parentmenu))))
+			     ;:parent parentmenu
+			     ;:parent-offset (popup-offset parentmenu)
+			     )))
+    
+    (message (format "parentheight = %d top = %d pt = %d finalpt = %d" 
+		     (popup-current-height parentmenu) top pt finalpt))
     (popup-set-list menu 
-		    (cdr (popup-fill-string doc nil max-width 'left)))
+		    (cdr doc-filled))
     (popup-draw menu)
     (clear-this-command-keys)
     (push (read-event prompt) unread-command-events)
@@ -779,10 +784,6 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
        (popup-delete ac-clang-project-locate-menu)
        (goto-char pt))
      pop)))
-
-(ac-clang-project-locate-popup '(("typeref" 
-				  "/usr/local/include/clang-c/Index.h"
-				  2260 28 "false")))
 
 (defun ac-clang-project-locate-display-results (proc)
   (with-current-buffer (process-buffer proc)
