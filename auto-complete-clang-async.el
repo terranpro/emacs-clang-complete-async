@@ -661,6 +661,129 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 	       (string-to-number (match-string 3)))))
       result)))
 
+(defun ac-clang-project-locate-preview-src (file line col &optional offset)
+  (with-current-buffer (find-file-noselect file)
+    (save-restriction
+      (goto-char (point-min))
+      (forward-line line)
+      (let* ((off (or offset 2))
+	     (start (save-excursion (progn (forward-line (- off))
+					  (point))))
+	     (stop (save-excursion (progn (forward-line off)
+					 (point)))))
+	(narrow-to-region start stop)
+	(buffer-string)))))
+
+(ac-clang-project-locate-preview-src "/usr/local/include/clang-c/Index.h"
+				     2260
+				     28)
+
+(defvar ac-clang-project-locate-menu nil)
+(defvar ac-clang-project-locate-menu-doc nil)
+
+(defun ac-clang-project-show-quick-help (parentmenu)
+  (let* ((doc (substring-no-properties (popup-menu-documentation parentmenu)))
+	 (pt (let ((ovend (overlay-end
+			   (popup-line-overlay
+			    parentmenu
+			    (or (popup-offset parentmenu)
+				(popup-selected-line parentmenu)))))) 
+	       (goto-char ovend)
+	       (message (format "ovend = %d" ovend))
+	       (forward-line 3)
+	       (move-to-column 0)
+	       (point)))
+	 (max-width (window-width))
+	 (width (/ max-width 2))
+	 (height 30)
+	 (menu (popup-create pt width height
+			     :face 'popup-tip-face
+			     :around nil
+			     :scroll-bar t
+			     :parent parentmenu
+			     :parent-offset (popup-offset parentmenu))))
+    (popup-set-list menu 
+		    (cdr (popup-fill-string doc nil max-width 'left)))
+    (popup-draw menu)
+    (clear-this-command-keys)
+    (push (read-event prompt) unread-command-events)
+    (popup-delete menu)))
+
+(defun ac-clang-project-locate-popup (results)
+  (with-current-buffer (get-file-buffer current-clang-file)
+   (let ((pt (point))
+	 (cont ">")
+	 (sum-width 29)
+	 (pop-data)
+	 (map (copy-keymap popup-menu-keymap))
+	 (pop))
+
+     (define-key map (kbd "<up>") #'(lambda ()
+					(interactive)
+					(popup-previous
+					 ac-clang-project-locate-menu)
+					;; (popup-tip
+					;;  (popup-menu-documentation 
+					;;   ac-clang-project-locate-menu))
+					
+					(ac-clang-project-show-quick-help
+					 ac-clang-project-locate-menu)))
+
+     (define-key map (kbd "<down>") #'(lambda ()
+					(interactive)
+					(popup-next 
+					 ac-clang-project-locate-menu)
+					;; (popup-tip
+					;;  (popup-menu-documentation 
+					;;   ac-clang-project-locate-menu))
+					
+					(ac-clang-project-show-quick-help
+					 ac-clang-project-locate-menu)))
+
+     (setq pop-data
+	   (loop for (desc file line col def) in results
+		 for summary = 
+		 (concat file
+			 " :" 
+			 (number-to-string line)
+			 ":" 
+			 (number-to-string col))
+		 collect
+		 (popup-make-item
+		  (if (> (length summary) sum-width)
+		      (concat cont (subseq summary (+ (length cont)
+						      (- 0 sum-width))))
+		    summary)
+		  :value (list file line col)
+		  :document (ac-clang-project-locate-preview-src 
+			     file line col 10))))
+
+     ;(pp pop-data)
+     (setq ac-clang-project-locate-menu
+	   (popup-menu* pop-data
+			:nowait t
+			:keymap map
+			:around t
+			:width (popup-preferred-width pop-data)
+			:height 30
+			:margin-left 1
+			:scroll-bar t 
+			:symbol t))
+     
+     (unwind-protect 
+	 (progn (popup-draw ac-clang-project-locate-menu)
+		(setq pop (popup-menu-event-loop ac-clang-project-locate-menu
+						 map
+						 'popup-menu-fallback)))
+
+       (popup-delete ac-clang-project-locate-menu)
+       (goto-char pt))
+     pop)))
+
+(ac-clang-project-locate-popup '(("typeref" 
+				  "/usr/local/include/clang-c/Index.h"
+				  2260 28 "false")))
+
 (defun ac-clang-project-locate-display-results (proc)
   (with-current-buffer (process-buffer proc)
     (let ((result)
@@ -682,13 +805,15 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 		      (string-to-number (match-string 4))
 		      (match-string 5))))))
 
-      (setq result 
-	    (sort result #'(lambda (a b)
-			     (if (string= (nth 4 a) "true")
-				 t
-			       nil))))
-      (pp (delete-dups result))
-      (delete-dups result))))
+      (when result
+       (setq result 
+	     (sort result #'(lambda (a b)
+			      (if (string= (nth 4 a) "true")
+				  t
+				nil))))
+
+       (pp (delete-dups result))
+       (ac-clang-project-locate-popup (delete-dups result))))))
 
 
 (defun ac-clang-filter-output (proc string)
@@ -713,11 +838,13 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 
 	(prj-locate 
 	 (setq ac-clang-status 'idle)
-	 (let ((result (ac-clang-project-locate-display-results proc)))
-	   (when (car result)
-	     (let ((file (nth 1 (car result)))
-		   (line (nth 2 (car result)))
-		   (col  (nth 3 (car result))))
+	 (let ((oldpt (point))
+	       (result (ac-clang-project-locate-display-results proc)))
+	   (goto-char oldpt)
+	   (when result
+	     (let ((file (nth 0 result))
+		   (line (nth 1 result))
+		   (col  (nth 2 result)))
 	       (ac-clang-goto-definition file line col)))))
 
 	(prj-srcs 
@@ -829,9 +956,9 @@ LINE and COL if it exists, storing the current location in
 		 (goto-char (point-min))
 		 (forward-line (1- line))
 		 (forward-char (1- col))
+		 (setq ac-clang-project-id cur-ac-clang-project-id)
 		 (when update-cflags
 		   (setq ac-clang-cflags cur-ac-clang-cflags)
-		   (setq ac-clang-project-id cur-ac-clang-project-id)
 		   (ac-clang-update-cmdlineargs))))
 	   (error
 	    ;;if not found remove the tag saved in the ring  

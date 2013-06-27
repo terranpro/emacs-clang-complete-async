@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include "msg_callback.h"
 
+#define BARK fprintf(stdout, "%s : %s:%d\n", __PRETTY_FUNCTION__, \
+		     __FILE__, __LINE__)
 
 /* discard all remaining contents on this line, jump to the beginning of the
    next line */
@@ -247,6 +249,7 @@ static int next_project = 0;
 
 void projectNew(completion_Project *prj)
 {
+  BARK;
   prj->index = clang_createIndex(0, 1);
   prj->parsed = 0;
   prj->active_tunit = -1;
@@ -258,6 +261,7 @@ void projectNew(completion_Project *prj)
 
 int projectFindId(char const *src_file)
 {
+  BARK;
   int cur_prj = 0;
   completion_Project *prj = NULL;
 
@@ -287,12 +291,14 @@ int projectFindId(char const *src_file)
 
 void projectOptions(completion_Project *prj, int argc, char **argv)
 {
+  BARK;
   prj->arg_count = argc;
   prj->args = argv;
 }
 
 void projectAdd(completion_Project *prj, char const *src_file)
 {
+  BARK;
   const int alloc_size = 512;
 
   if ( prj->src_count < 0 || prj->src_count % alloc_size == 0 ) {
@@ -371,6 +377,7 @@ void projectAdd(completion_Project *prj, char const *src_file)
 static void 
 print_LocationResult(CXCursor cursor, CXSourceLocation loc)
 {
+  BARK;
   CXFile cxfile;
   unsigned l;
   unsigned c;
@@ -420,10 +427,10 @@ usrmatcher(CXCursor c, CXCursor p, CXClientData d)
     result = CXChildVisit_Continue;
     ++result_count;
   } else {
-    printf("FISHED!\n");
-    CXSourceLocation loc = clang_getCursorLocation( c );
-    print_LocationResult( c, loc );
-    fflush(stdout);
+    //printf("FISHED!\n");
+    //CXSourceLocation loc = clang_getCursorLocation( c );
+    //print_LocationResult( c, loc );
+    //fflush(stdout);
   }
 
   if ( result_count >= max_result_count )
@@ -435,6 +442,7 @@ usrmatcher(CXCursor c, CXCursor p, CXClientData d)
 
 static void locate_include(completion_Project *prj, CXCursor cursor)
 {
+  BARK;
   CXSourceLocation loc = clang_getCursorLocation( cursor );
   CXFile file = clang_getIncludedFile( cursor );
   loc = clang_getLocation( prj->tunits[ prj->active_tunit ], file, 1, 1 );
@@ -445,6 +453,7 @@ static void locate_include(completion_Project *prj, CXCursor cursor)
 
 static void locate_declrefexpr(completion_Project *prj, CXCursor cursor)
 {
+  BARK;
   CXCursor prevcursor = cursor;
   CXType type;
 
@@ -462,24 +471,26 @@ static void locate_declrefexpr(completion_Project *prj, CXCursor cursor)
 
   print_LocationResult(cursor, loc);
 
-  int tu_count = 0;
   CXString cursor_usr = clang_getCursorUSR( cursor );
-  printf("Cursor USR Spelling: %s\n", clang_getCString( cursor_usr ));
+  if ( clang_getCursorLinkage( cursor ) > CXLinkage_Internal ) {
+    
+    int tu_count = 0;
+    printf("Cursor USR Spelling: %s\n", clang_getCString( cursor_usr ));
 
-  result_count = 0;
-  fflush(stdout);
-
-  while( prj->tunits[tu_count] != NULL ) {
-    CXCursor c = clang_getTranslationUnitCursor( prj->tunits[tu_count] );
-    printf("Scanning file: %s\n", prj->src_filenames[ tu_count ] );
+    result_count = 0;
     fflush(stdout);
 
-    if (!clang_Cursor_isNull( c ) )
-      clang_visitChildren( c , usrmatcher, &cursor_usr );
+    while( prj->tunits[tu_count] != NULL ) {
+      CXCursor c = clang_getTranslationUnitCursor( prj->tunits[tu_count] );
+      printf("Scanning file: %s\n", prj->src_filenames[ tu_count ] );
+      fflush(stdout);
 
-    ++tu_count;
+      if (!clang_Cursor_isNull( c ) )
+	clang_visitChildren( c , usrmatcher, &cursor_usr );
+
+      ++tu_count;
+    }
   }
-
   printf("declref FIN\n");
   fflush(stdout);
 
@@ -488,11 +499,11 @@ static void locate_declrefexpr(completion_Project *prj, CXCursor cursor)
 
 //static void locate_declrefexpr(completion_Project *prj, CXCursor cursor)
 //{
-
 //}
 
 static void locate_classtemplate(completion_Project *prj, CXCursor cursor)
 {
+  BARK;
   CXCursor defcursor = clang_getCursorDefinition( cursor );
   if (!clang_equalCursors(defcursor, clang_getNullCursor())) {
     fprintf(stdout, "Found Definition!\n");
@@ -519,6 +530,7 @@ static void locate_classtemplate(completion_Project *prj, CXCursor cursor)
 
 static void locate_classdecl(completion_Project *prj, CXCursor cursor)
 {
+  BARK;
   CXCursor prevcursor = cursor;
   CXType type;
 
@@ -547,6 +559,7 @@ static void locate_classdecl(completion_Project *prj, CXCursor cursor)
 
 static void locate_typedefdecl(completion_Project *prj, CXCursor cursor)
 {
+  BARK;
   CXType type = clang_getCursorType( cursor );
   cursor = clang_getTypeDeclaration(type);
   print_LocationResult( cursor, clang_getCursorLocation(cursor) );
@@ -590,6 +603,7 @@ virtualmatcher(CXCursor c, CXCursor p, CXClientData d)
 
 static void locate_cxxmethod(completion_Project *prj, CXCursor cursor)
 {
+  BARK;
   if ( clang_CXXMethod_isVirtual( cursor ) ) {
     fprintf(stdout, "Method is virtual! scanning!\n");
     int tu_index = 0;
@@ -607,6 +621,7 @@ static void locate_cxxmethod(completion_Project *prj, CXCursor cursor)
 
 static void locate_memberrefexpr(completion_Project *prj, CXCursor cursor)
 {
+  BARK;
   CXCursor prevcursor = cursor;
   CXType type;
 
@@ -622,15 +637,54 @@ static void locate_memberrefexpr(completion_Project *prj, CXCursor cursor)
     locate_cxxmethod( prj, cursor );
 }
 
+enum CXChildVisitResult
+namespace_matcher(CXCursor c, CXCursor p, CXClientData d)
+{
+  if ( c.kind == CXCursor_NamespaceRef )
+    c = clang_getCursorReferenced( c );
+
+  if ( c.kind != CXCursor_Namespace )
+    return CXChildVisit_Recurse;
+
+  print_LocationResult( c, clang_getCursorLocation( c ));
+  return CXChildVisit_Continue;
+}
+
+static void locate_namespace(completion_Project *prj, CXCursor cursor)
+{
+  BARK;
+  CXCursor prevcursor = cursor;
+  cursor = clang_getCursorReferenced( cursor );
+  if ( clang_Cursor_isNull( cursor ) ) {
+    cursor = prevcursor;
+  }
+
+  size_t tu_index = 0;
+  for ( ; tu_index < prj->src_count; ++tu_index ) {
+    CXCursor tuparent = 
+      clang_getTranslationUnitCursor( prj->tunits[tu_index] );
+    clang_visitChildren( tuparent, namespace_matcher, &cursor );
+  }
+
+}
+
 void locate_cursorDispatch(completion_Project *prj, CXCursor cursor)
 {
+  BARK;
   switch(cursor.kind) {
   case CXCursor_InclusionDirective:
     locate_include( prj , cursor );
     break;
 
+  case CXCursor_ParmDecl:
+  case CXCursor_VarDecl:
   case CXCursor_TypedefDecl:
     locate_typedefdecl( prj, cursor );
+    break;
+
+  case CXCursor_Namespace:
+  case CXCursor_NamespaceRef:
+    locate_namespace( prj, cursor );
     break;
 
   case CXCursor_CallExpr:
@@ -666,14 +720,32 @@ void locate_cursorDispatch(completion_Project *prj, CXCursor cursor)
 
 void projectLocate(completion_Project *prj, int line, int column)
 {
+  BARK;
   CXCursor cursor;
   CXSourceLocation loc;
   ssize_t i = prj->active_tunit;
 
   fprintf(stdout, "Active TU # = %d\n", i);
-  if ( clang_reparseTranslationUnit( prj->tunits[ i ], 0, NULL, 
+
+  if ( !prj->tunits[ i ] ) {
+    fprintf(stdout, "Active TU is NULL - Creating...\n");
+    prj->tunits[ i ] = 
+      clang_createTranslationUnitFromSourceFile(prj->index, 
+						prj->src_filenames[ i ], 
+						prj->arg_count,
+						prj->args, 0, NULL);
+
+    if ( !prj->tunits[i] ) {
+      fprintf(stdout, "Creating TU FAILED!\n");
+      return;
+    }
+  }
+  
+  else if ( clang_reparseTranslationUnit( prj->tunits[ i ], 0, NULL, 
 				     DEFAULT_PARSE_OPTIONS ) != 0 ) {
     fprintf(stdout, "Reparsing Translation Unit Failed!\n");
+    clang_disposeTranslationUnit( prj->tunits[ i ] );
+    prj->tunits[ i ] = NULL;
     return;
   }
 
@@ -710,6 +782,7 @@ void projectLocate(completion_Project *prj, int line, int column)
 
 void completion_doProject(completion_Session *session, FILE *fp)
 {
+  BARK;
   int id;
   char subcmd[2048 * 100];
   fgets(subcmd, sizeof(subcmd), fp);
