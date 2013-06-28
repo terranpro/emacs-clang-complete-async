@@ -665,48 +665,85 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
   (with-current-buffer (find-file-noselect file)
     (save-restriction
       (goto-char (point-min))
-      (forward-line line)
+      (forward-line (1- line))
+
       (let* ((off (or offset 2))
-	     (start (save-excursion (progn (forward-line (- off))
-					  (point))))
-	     (stop (save-excursion (progn (forward-line off)
-					 (point)))))
-	(narrow-to-region start stop)
-	(buffer-string)))))
+	     (hit-text (propertize
+			(buffer-substring-no-properties
+			 (point-at-bol) (point-at-eol))
+			'face '(popup-tip-face bold)))
+	     (pre-text 
+	      (buffer-substring-no-properties
+	       (save-excursion (progn (forward-line (- off))
+				      (point)))
+	       (point-at-bol)))
+	     (post-text
+	      (buffer-substring-no-properties
+	       (point-at-eol)
+	       (save-excursion (progn (forward-line off)
+				      (point))))))
+	(concat pre-text hit-text post-text)))))
 
 (defvar ac-clang-project-locate-menu nil)
 (defvar ac-clang-project-locate-menu-doc nil)
 
 (defun ac-clang-project-show-quick-help (parentmenu)
-  (let* ((doc (substring-no-properties (popup-menu-documentation parentmenu)))
-	 (pt (let ((ovend (overlay-end
-			   (popup-line-overlay
-			    parentmenu
-			    (or (popup-offset parentmenu)
-				(popup-selected-line parentmenu)))))) 
-	       (goto-char ovend)
-	       (message (format "ovend = %d" ovend))
-	       (forward-line 3)
-	       (move-to-column 0)
-	       (point)))
+  (let* ((doc (popup-menu-documentation parentmenu))
+	 ;(doc (substring-no-properties (popup-menu-documentation parentmenu)))
 	 (max-width (window-width))
 	 (doc-filled (popup-fill-string doc nil max-width 'left))
 	 (width (min max-width (car doc-filled)))
 	 (height (min 30 (length (cdr doc-filled))))
+	 (ovbeg 
+	  (overlay-start (popup-line-overlay parentmenu 0)))
+	 (pt (let (
+		   ;; (ovend (overlay-end
+		   ;; 	   (popup-line-overlay
+		   ;; 	    parentmenu
+		   ;; 	    (or (popup-offset parentmenu)
+		   ;; 		(popup-selected-line parentmenu)))))
+		   
+		   (ovend 
+		    (overlay-end (popup-line-overlay 
+				  parentmenu 
+				  (1- 
+				   (length (popup-overlays parentmenu)))))))
+
+	       (message (format "ovbeg %d ovend %d" ovbeg ovend))
+	       (goto-char ovend)
+	       
+	       ;(forward-line (1+ height))
+	       (forward-line 1)
+	       (move-to-column 0)
+	       (message (format "end of parentmenu = %d" (point)))
+	       (point)))
 	 (row (line-number-at-pos pt))
 	 (direction (popup-calculate-direction height row))
-	 (top (+ (max height (length (cdr doc-filled))) (popup-current-height parentmenu) 1))
-	 (finalpt (if (eq direction -1) (progn (vertical-motion (- top)) (point)) pt))
+	 (top (save-excursion 
+		(goto-char ovbeg)
+		(forward-line (- 1))
+		(point)))
+	 (finalpt (if (eq direction -1)
+		      (save-excursion 
+			(goto-char top)
+			(vertical-motion (- height))
+			(point))
+		    pt))
 	 (menu (popup-create finalpt width height
 			     :face 'popup-tip-face
 			     :around nil
 			     :scroll-bar t
-			     ;:parent parentmenu
-			     ;:parent-offset (popup-offset parentmenu)
+					;:parent parentmenu
+					;:parent-offset (popup-offset parentmenu)
 			     )))
     
-    (message (format "parentheight = %d top = %d pt = %d finalpt = %d" 
-		     (popup-current-height parentmenu) top pt finalpt))
+    ;(pp (popup-list parentmenu))
+    (pp (popup-overlays parentmenu))
+    (message 
+     (format "direction = %d height = %d
+parentheight = %d top = %d pt = %d finalpt = %d" 
+	     direction height (popup-current-height parentmenu) 
+	     top pt finalpt))
     (popup-set-list menu 
 		    (cdr doc-filled))
     (popup-draw menu)
@@ -770,7 +807,7 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 			:keymap map
 			:around t
 			:width (popup-preferred-width pop-data)
-			:height 30
+			:height (min 30 (length pop-data))
 			:margin-left 1
 			:scroll-bar t 
 			:symbol t))
@@ -813,7 +850,7 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 				  t
 				nil))))
 
-       (pp (delete-dups result))
+       ;(pp (delete-dups result))
        (ac-clang-project-locate-popup (delete-dups result))))))
 
 
@@ -957,6 +994,7 @@ LINE and COL if it exists, storing the current location in
 		 (goto-char (point-min))
 		 (forward-line (1- line))
 		 (forward-char (1- col))
+		 (recenter)
 		 (setq ac-clang-project-id cur-ac-clang-project-id)
 		 (when update-cflags
 		   (setq ac-clang-cflags cur-ac-clang-cflags)

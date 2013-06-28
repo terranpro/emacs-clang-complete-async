@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include "msg_callback.h"
 
-#define BARK fprintf(stdout, "%s : %s:%d\n", __PRETTY_FUNCTION__, \
+#define BARK fprintf(stdout, "!! BARK !! %s : %s:%d\n", __PRETTY_FUNCTION__, \
 		     __FILE__, __LINE__)
 
 /* discard all remaining contents on this line, jump to the beginning of the
@@ -454,6 +454,45 @@ static void locate_include(completion_Project *prj, CXCursor cursor)
   print_LocationResult( inc_cursor, loc );
 }
 
+static void locate_functiondecl(completion_Project *prj, CXCursor cursor)
+{
+  BARK;
+  CXCursor prevcursor = cursor;
+  CXType type;
+
+  cursor = clang_getCursorReferenced( cursor );
+  if ( clang_Cursor_isNull( cursor ) ) {
+    type = clang_getCursorType( prevcursor );
+    cursor = clang_getTypeDeclaration(type);
+  }
+
+  CXSourceLocation loc =
+    clang_getCursorLocation( cursor );
+
+  print_LocationResult(cursor, loc);
+
+  CXString cursor_usr = clang_getCursorUSR( cursor );
+  if ( clang_getCursorLinkage( cursor ) > CXLinkage_Internal ) {
+    
+    int tu_count = 0;
+    printf("Cursor USR Spelling: %s\n", clang_getCString( cursor_usr ));
+
+    result_count = 0;
+
+    while( tu_count < prj->src_count && prj->tunits[tu_count] != NULL ) {
+      CXCursor c = clang_getTranslationUnitCursor( prj->tunits[tu_count] );
+      printf("Scanning file: %s\n", prj->src_filenames[ tu_count ] );
+
+      if (!clang_Cursor_isNull( c ) )
+	clang_visitChildren( c , usrmatcher, &cursor_usr );
+
+      ++tu_count;
+    }
+  }
+
+  clang_disposeString( cursor_usr );
+}
+
 static void locate_declrefexpr(completion_Project *prj, CXCursor cursor)
 {
   BARK;
@@ -664,6 +703,27 @@ static void locate_namespace(completion_Project *prj, CXCursor cursor)
 
 }
 
+enum CXChildVisitResult
+printvisitor(CXCursor c, CXCursor p, CXClientData d)
+{
+  print_LocationResult( c, clang_getCursorLocation(c) );
+  return CXChildVisit_Continue;
+}
+
+static void locate_macrodefinition(completion_Project *prj, CXCursor cursor)
+{
+  BARK;
+  print_LocationResult( cursor, clang_getCursorLocation(cursor) );
+  clang_visitChildren( cursor, printvisitor, NULL );
+}
+
+static void locate_enumdecl(completion_Project *prj, CXCursor cursor)
+{
+  BARK;
+  print_LocationResult( cursor, clang_getCursorLocation(cursor) );
+  clang_visitChildren( cursor, printvisitor, NULL );
+}
+
 void locate_cursorDispatch(completion_Project *prj, CXCursor cursor)
 {
   BARK;
@@ -683,6 +743,15 @@ void locate_cursorDispatch(completion_Project *prj, CXCursor cursor)
     locate_namespace( prj, cursor );
     break;
 
+  case CXCursor_MacroDefinition:
+    locate_macrodefinition( prj, cursor );
+    break;
+
+  case CXCursor_EnumDecl:
+    locate_enumdecl( prj, cursor );
+    break;
+
+  case CXCursor_MacroExpansion:
   case CXCursor_CallExpr:
   case CXCursor_DeclRefExpr:
     locate_declrefexpr( prj, cursor );
@@ -694,6 +763,10 @@ void locate_cursorDispatch(completion_Project *prj, CXCursor cursor)
 
   case CXCursor_ClassTemplate:
     locate_classtemplate( prj, cursor );
+    break;
+
+  case CXCursor_FunctionDecl:
+    locate_functiondecl( prj, cursor );
     break;
 
   case CXCursor_FieldDecl:
