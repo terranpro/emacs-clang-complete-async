@@ -493,15 +493,16 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
   (unless proc 
     (setq proc ac-clang-completion-process))
 
-  (message "Finding ID...")
+  (when proc 
+    (message "Finding ID...")
 
-  (setq current-clang-file (buffer-file-name))
-  (setq ac-clang-status 'prj-id)
-  (with-current-buffer (process-buffer proc)
-    (erase-buffer))
-  (process-send-string 
-   proc 
-   (format "PROJECT\nFIND_ID\n%s\n" current-clang-file)))
+    (setq current-clang-file (buffer-file-name))
+    (setq ac-clang-status 'prj-id)
+    (with-current-buffer (process-buffer proc)
+      (erase-buffer))
+    (process-send-string 
+     proc 
+     (format "PROJECT\nFIND_ID\n%s\n" current-clang-file))))
 
 (defun ac-clang-project-new (&optional proc)
   (interactive)
@@ -661,28 +662,104 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 	       (string-to-number (match-string 3)))))
       result)))
 
-(defun ac-clang-project-locate-preview-src (file line col &optional offset)
-  (with-current-buffer (find-file-noselect file)
-    (save-restriction
-      (goto-char (point-min))
-      (forward-line (1- line))
+(defun ac-clang-project-locate-preview-src-face-attr-add (txt attr value)
+  (let* ((cur 0)
+	 (end (length txt))
+	 (iter 0)
+	 (curface)
+	 (newbg (face-attribute 'popup-tip-face :background))
+	 (next-change 0))
+    ;(pp txt)
+    (while (and (< next-change end)
+		(< iter 10000))
+      (setq iter (1+ iter))
+      (setq next-change ;(next-property-change cur txt end)
+	    (next-single-property-change cur 'face txt end)
+	    )
+      (setq curface (or (get-text-property cur 'face txt) 'popup-tip-face))
+      
+      (setq curface 
+	    (if (listp curface)
+		(append curface (list attr value))
+	      (list curface attr value)))
 
-      (let* ((off (or offset 2))
-	     (hit-text (propertize
-			(buffer-substring-no-properties
-			 (point-at-bol) (point-at-eol))
-			'face '(popup-tip-face bold)))
-	     (pre-text 
-	      (buffer-substring-no-properties
-	       (save-excursion (progn (forward-line (- off))
-				      (point)))
-	       (point-at-bol)))
-	     (post-text
-	      (buffer-substring-no-properties
-	       (point-at-eol)
-	       (save-excursion (progn (forward-line off)
-				      (point))))))
-	(concat pre-text hit-text post-text)))))
+      (set-text-properties cur next-change nil txt)
+      ;(remove-text-properties cur next-change txt)
+      (add-text-properties cur next-change
+			   `(face ,curface)
+			   ;`(face (,curface ,attr ,value )) txt
+			   txt)
+      (pp (substring txt cur next-change))
+      (message (format "%d %d" 
+		       cur next-change))
+      (setq cur next-change))
+    ;(pp txt)
+    txt))
+
+(defun brian-face-attr-add-tester ()
+  (interactive)
+  (let ((txt (buffer-substring (point-min) (point-max))))
+    (with-current-buffer (get-buffer-create "garbage")
+      (insert 
+       (ac-clang-project-locate-preview-src-face-attr-add
+	txt :background "khaki1")))))
+
+(defun ac-clang-project-locate-preview-src (file line col &optional offset)
+  (save-window-excursion
+   (with-current-buffer (find-file file) ;(find-file-noselect file)
+     (font-lock-fontify-buffer)
+     (save-restriction
+       (goto-char (point-min))
+       (forward-line (1- line))
+
+       (let* ((popup-tip-face-bg (face-attribute 'popup-tip-face :background))
+	      (off (or offset 2))
+
+	      (hit-text (propertize
+			 (buffer-substring ;-no-properties
+			  (point-at-bol) (point-at-eol))
+			 'face '(popup-tip-face bold)))
+
+	      (pre-text 
+	       (buffer-substring       ;buffer-substring-no-properties
+		(save-excursion (progn (forward-line (- off))
+				       (point)))
+		(point-at-bol)))
+
+
+	      (post-text
+	      
+	       (buffer-substring	;-no-properties
+		(point-at-eol)
+		(save-excursion (progn (forward-line off)
+				       (point)))))
+
+	      )
+
+	 (ac-clang-project-locate-preview-src-face-attr-add
+	  (concat pre-text hit-text post-text)
+	  :background
+	  popup-tip-face-bg)
+
+	 ;(concat pre-text hit-text post-text)
+	 )
+      
+       ))))
+
+;; (let ((popup-tip-face-bg (face-attribute 'popup-tip-face :background)))
+;;   (propertize 
+;;   (buffer-substring		       ;buffer-substring-no-properties
+;;    (point-min) (point-max))
+;;   'face `(:background ,popup-tip-face-bg)))
+
+;; (let* ((txt  (buffer-substring (point-min) (+ (point-min) 25)))
+;;        (cur 1)
+;;        (end (length txt))
+;;        (next-change (next-property-change cur txt end)))
+;;   (while (setq next-change (next-property-change cur txt end))
+;;     (add-text-properties cur next-change '(face (:background blue)))
+;;     (setq cur next-change))
+;;   txt)
 
 (defvar ac-clang-project-locate-menu nil)
 (defvar ac-clang-project-locate-menu-doc nil)
@@ -691,7 +768,8 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
   (let* ((doc (popup-menu-documentation parentmenu))
 	 ;(doc (substring-no-properties (popup-menu-documentation parentmenu)))
 	 (max-width (window-width))
-	 (doc-filled (popup-fill-string doc nil max-width 'left))
+	 (doc-filled (popup-fill-string doc nil max-width 'left t)
+	  )
 	 (width (min max-width (car doc-filled)))
 	 (height (min 30 (length (cdr doc-filled))))
 	 (ovbeg 
@@ -738,14 +816,31 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 			     )))
     
     ;(pp (popup-list parentmenu))
-    (pp (popup-overlays parentmenu))
+    ;(pp (popup-overlays parentmenu))
+    ;(pp doc-filled)
+
+
+    ;; (setq doc-filled
+    ;; 	  (list
+    ;; 	   (car doc-filled)
+    ;; 	   (mapcar 
+    ;; 	    #'(lambda (str)
+    ;; 		(ac-clang-project-locate-preview-src-face-attr-add
+    ;; 		 str
+    ;; 		 :background "khaki1"))
+
+    ;; 	    (remove-if
+    ;; 	     #'(lambda (str) (string= "" str))
+    ;; 	     (cdr doc-filled)   ))))
+
+;    (pp doc-filled)
+
     (message 
      (format "direction = %d height = %d
 parentheight = %d top = %d pt = %d finalpt = %d" 
 	     direction height (popup-current-height parentmenu) 
 	     top pt finalpt))
-    (popup-set-list menu 
-		    (cdr doc-filled))
+    (popup-set-list menu (cdr doc-filled))
     (popup-draw menu)
     (clear-this-command-keys)
     (push (read-event prompt) unread-command-events)
@@ -754,8 +849,8 @@ parentheight = %d top = %d pt = %d finalpt = %d"
 (defun ac-clang-project-locate-popup (results)
   (with-current-buffer (get-file-buffer current-clang-file)
    (let ((pt (point))
-	 (cont ">")
-	 (sum-width 29)
+	 (cont "...")
+	 (file-width 20)
 	 (pop-data)
 	 (map (copy-keymap popup-menu-keymap))
 	 (pop))
@@ -785,17 +880,18 @@ parentheight = %d top = %d pt = %d finalpt = %d"
      (setq pop-data
 	   (loop for (desc file line col def) in results
 		 for summary = 
-		 (concat file
-			 " :" 
-			 (number-to-string line)
-			 ":" 
-			 (number-to-string col))
+		 (format
+		  (concat "%.12s ! %." (number-to-string file-width) "s :%4d:%3d")
+		  desc
+		  (if (> (length file) file-width)
+		      (concat cont (subseq file (+ (length cont)
+						   (- 0 file-width))))
+		    file)
+		  line
+		  col)
 		 collect
 		 (popup-make-item
-		  (if (> (length summary) sum-width)
-		      (concat cont (subseq summary (+ (length cont)
-						      (- 0 sum-width))))
-		    summary)
+		  summary
 		  :value (list file line col)
 		  :document (ac-clang-project-locate-preview-src 
 			     file line col 10))))

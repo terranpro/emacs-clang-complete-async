@@ -382,7 +382,8 @@ print_LocationResult(CXCursor cursor, CXSourceLocation loc)
   unsigned l;
   unsigned c;
   CXString cxstrfile;
-  CXString cxstrcursor;
+  CXString cxstr_cursorkind_spelling;
+  CXString cxstr_cursor_spelling;
 
   clang_getSpellingLocation( loc, &cxfile, &l, &c, NULL );
 
@@ -391,21 +392,25 @@ print_LocationResult(CXCursor cursor, CXSourceLocation loc)
     return;
   }
 
-  cxstrcursor = clang_getCursorKindSpelling( cursor.kind );
+  cxstr_cursorkind_spelling = clang_getCursorKindSpelling( cursor.kind );
   cxstrfile = clang_getFileName( cxfile );
 
+  cxstr_cursor_spelling =  clang_getCursorSpelling( cursor );
+
   fprintf(stdout,
-	  "%s\ndesc:%s\nfile:%s\nline:%d\ncolumn:%d\ndefinition:%s\n",
+	  "%s\ndesc:%s ! %s\nfile:%s\nline:%d\ncolumn:%d\ndefinition:%s\n",
 	  "PRJ_LOCATE:",
-	  clang_getCString( cxstrcursor ),
+	  clang_getCString( cxstr_cursorkind_spelling ),
+	  clang_getCString( cxstr_cursor_spelling ),
 	  clang_getCString( cxstrfile ),
 	  l,
 	  c,
 	  clang_isCursorDefinition( cursor ) ? "true" : "false"
 	  );
 
+  clang_disposeString( cxstr_cursorkind_spelling );
+  clang_disposeString( cxstr_cursor_spelling );
   clang_disposeString( cxstrfile );
-  clang_disposeString( cxstrcursor );
 }
 
 static size_t result_count = 0;
