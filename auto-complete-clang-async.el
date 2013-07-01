@@ -843,15 +843,16 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
     (popup-delete menu)))
 
 (defun ac-clang-project-locate-popup (results)
-  (with-current-buffer (get-file-buffer current-clang-file)
-   (let ((pt (point))
-	 (cont "...")
-	 (file-width 20)
-	 (pop-data)
-	 (map (copy-keymap popup-menu-keymap))
-	 (pop))
+  (save-window-excursion
+    (with-current-buffer (get-file-buffer current-clang-file)
+     (let (;(pt (point))
+	   (cont "...")
+	   (file-width 20)
+	   (pop-data)
+	   (map (copy-keymap popup-menu-keymap))
+	   (pop))
 
-     (define-key map (kbd "<up>") #'(lambda ()
+       (define-key map (kbd "<up>") #'(lambda ()
 					(interactive)
 					(popup-previous
 					 ac-clang-project-locate-menu)
@@ -862,59 +863,61 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 					(ac-clang-project-show-quick-help
 					 ac-clang-project-locate-menu)))
 
-     (define-key map (kbd "<down>") #'(lambda ()
-					(interactive)
-					(popup-next 
-					 ac-clang-project-locate-menu)
-					;; (popup-tip
-					;;  (popup-menu-documentation 
-					;;   ac-clang-project-locate-menu))
+       (define-key map (kbd "<down>") #'(lambda ()
+					  (interactive)
+					  (popup-next 
+					   ac-clang-project-locate-menu)
+					  ;; (popup-tip
+					  ;;  (popup-menu-documentation 
+					  ;;   ac-clang-project-locate-menu))
 					
-					(ac-clang-project-show-quick-help
-					 ac-clang-project-locate-menu)))
+					  (ac-clang-project-show-quick-help
+					   ac-clang-project-locate-menu)))
 
-     (setq pop-data
-	   (loop for (desc file line col def) in results
-		 for summary = 
-		 (format
-		  (concat "%12s ! %"
-			  (number-to-string file-width)
-			  "s :%4d:%3d")
-		  desc
-		  (if (> (length file) file-width)
-		      (concat cont (subseq file (+ (length cont)
-						   (- 0 file-width))))
-		    file)
-		  line
-		  col)
-		 collect
-		 (popup-make-item
-		  summary
-		  :value (list file line col)
-		  :document (ac-clang-project-locate-preview-src 
-			     file line col 10))))
+       (setq pop-data
+	     (loop for (desc file line col def) in results
+		   for summary = 
+		   (format
+		    (concat "%12s ! %"
+			    (number-to-string file-width)
+			    "s :%4d:%3d")
+		    desc
+		    (if (> (length file) file-width)
+			(concat cont (subseq file (+ (length cont)
+						     (- 0 file-width))))
+		      file)
+		    line
+		    col)
+		   collect
+		   (popup-make-item
+		    summary
+		    :value (list file line col)
+		    :document (ac-clang-project-locate-preview-src 
+			       file line col 10))))
 
-     ;(pp pop-data)
-     (setq ac-clang-project-locate-menu
-	   (popup-menu* pop-data
-			:nowait t
-			:keymap map
-			:around t
-			:width (popup-preferred-width pop-data)
-			:height (min 30 (length pop-data))
-			:margin-left 1
-			:scroll-bar t 
-			:symbol t))
+					;(pp pop-data)
+       (setq ac-clang-project-locate-menu
+	     (popup-menu* pop-data
+			  :nowait t
+			  :keymap map
+			  :around t
+			  :width (popup-preferred-width pop-data)
+			  :height (min 30 (length pop-data))
+			  :margin-left 1
+			  :scroll-bar t 
+			  :symbol t))
      
-     (unwind-protect 
-	 (progn (popup-draw ac-clang-project-locate-menu)
-		(setq pop (popup-menu-event-loop ac-clang-project-locate-menu
-						 map
-						 'popup-menu-fallback)))
+       (unwind-protect 
+	   (progn (popup-draw ac-clang-project-locate-menu)
+		  (setq pop (popup-menu-event-loop
+			     ac-clang-project-locate-menu
+			     map
+			     'popup-menu-fallback)))
 
-       (popup-delete ac-clang-project-locate-menu)
-       (goto-char pt))
-     pop)))
+	 (popup-delete ac-clang-project-locate-menu)
+	 ;(goto-char pt)
+	 )
+       pop))))
 
 (defun ac-clang-project-locate-display-results (proc)
   (with-current-buffer (process-buffer proc)
