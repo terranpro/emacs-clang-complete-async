@@ -674,14 +674,19 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 		(< iter 10000))
       (setq iter (1+ iter))
       (setq next-change ;(next-property-change cur txt end)
-	    (next-single-property-change cur 'face txt end)
-	    )
+	    (next-single-property-change cur 'face txt end))
       (setq curface (or (get-text-property cur 'face txt) 'popup-tip-face))
+
+      (setq curface (if (listp curface)
+			(car curface)
+		      curface))
       
       (setq curface 
-	    (if (listp curface)
-		(append curface (list attr value))
-	      (list curface attr value)))
+      	    (if (listp curface)
+      		(append curface (list attr value))
+      	      (list curface attr value)))
+
+
 
       (set-text-properties cur next-change nil txt)
       ;(remove-text-properties cur next-change txt)
@@ -689,9 +694,9 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 			   `(face ,curface)
 			   ;`(face (,curface ,attr ,value )) txt
 			   txt)
-      (pp (substring txt cur next-change))
-      (message (format "%d %d" 
-		       cur next-change))
+      ;; (pp (substring txt cur next-change))
+      ;; (message (format "%d %d" 
+      ;; 		       cur next-change))
       (setq cur next-change))
     ;(pp txt)
     txt))
@@ -714,37 +719,29 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 
        (let* ((popup-tip-face-bg (face-attribute 'popup-tip-face :background))
 	      (off (or offset 2))
-
 	      (hit-text (propertize
-			 (buffer-substring ;-no-properties
+			 (buffer-substring-no-properties
 			  (point-at-bol) (point-at-eol))
 			 'face '(popup-tip-face bold)))
 
 	      (pre-text 
-	       (buffer-substring       ;buffer-substring-no-properties
+	       (buffer-substring-no-properties
 		(save-excursion (progn (forward-line (- off))
 				       (point)))
 		(point-at-bol)))
 
-
 	      (post-text
-	      
-	       (buffer-substring	;-no-properties
+	       (buffer-substring-no-properties
 		(point-at-eol)
 		(save-excursion (progn (forward-line off)
-				       (point)))))
+				       (point))))))
 
-	      )
+	 ;; (ac-clang-project-locate-preview-src-face-attr-add
+	 ;;  (concat pre-text hit-text post-text)
+	 ;;  :background
+	 ;;  popup-tip-face-bg)
 
-	 (ac-clang-project-locate-preview-src-face-attr-add
-	  (concat pre-text hit-text post-text)
-	  :background
-	  popup-tip-face-bg)
-
-	 ;(concat pre-text hit-text post-text)
-	 )
-      
-       ))))
+	 (concat pre-text hit-text post-text))))))
 
 ;; (let ((popup-tip-face-bg (face-attribute 'popup-tip-face :background)))
 ;;   (propertize 
@@ -768,8 +765,7 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
   (let* ((doc (popup-menu-documentation parentmenu))
 	 ;(doc (substring-no-properties (popup-menu-documentation parentmenu)))
 	 (max-width (window-width))
-	 (doc-filled (popup-fill-string doc nil max-width 'left t)
-	  )
+	 (doc-filled (popup-fill-string doc nil max-width 'left t))
 	 (width (min max-width (car doc-filled)))
 	 (height (min 30 (length (cdr doc-filled))))
 	 (ovbeg 
@@ -787,13 +783,13 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 				  (1- 
 				   (length (popup-overlays parentmenu)))))))
 
-	       (message (format "ovbeg %d ovend %d" ovbeg ovend))
+	       ;(message (format "ovbeg %d ovend %d" ovbeg ovend))
 	       (goto-char ovend)
 	       
 	       ;(forward-line (1+ height))
 	       (forward-line 1)
 	       (move-to-column 0)
-	       (message (format "end of parentmenu = %d" (point)))
+	       ;(message (format "end of parentmenu = %d" (point)))
 	       (point)))
 	 (row (line-number-at-pos pt))
 	 (direction (popup-calculate-direction height row))
@@ -835,11 +831,11 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 
 ;    (pp doc-filled)
 
-    (message 
-     (format "direction = %d height = %d
-parentheight = %d top = %d pt = %d finalpt = %d" 
-	     direction height (popup-current-height parentmenu) 
-	     top pt finalpt))
+;;     (message 
+;;      (format "direction = %d height = %d
+;; parentheight = %d top = %d pt = %d finalpt = %d" 
+;; 	     direction height (popup-current-height parentmenu) 
+;; 	     top pt finalpt))
     (popup-set-list menu (cdr doc-filled))
     (popup-draw menu)
     (clear-this-command-keys)
@@ -881,7 +877,9 @@ parentheight = %d top = %d pt = %d finalpt = %d"
 	   (loop for (desc file line col def) in results
 		 for summary = 
 		 (format
-		  (concat "%.12s ! %." (number-to-string file-width) "s :%4d:%3d")
+		  (concat "%12s ! %"
+			  (number-to-string file-width)
+			  "s :%4d:%3d")
 		  desc
 		  (if (> (length file) file-width)
 		      (concat cont (subseq file (+ (length cont)
