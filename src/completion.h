@@ -28,20 +28,6 @@ typedef struct __completion_Session_struct
 
 } completion_Session;
 
-typedef struct completion_project__ {
-  char **src_filenames;
-  completion_Session *session;
-  CXTranslationUnit *tunits;
-  CXIndex index;
-  ssize_t active_tunit;
-  ssize_t src_count;
-  char parsed;
-
-  int arg_count;
-  char **args;
-  
-} completion_Project;
-
 /* COMPLETION SERVER DEFAULT SETTINGS */
 
 #define  DEFAULT_PARSE_OPTIONS       ( CXTranslationUnit_PrecompiledPreamble | CXTranslationUnit_DetailedPreprocessingRecord )
