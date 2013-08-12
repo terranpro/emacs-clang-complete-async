@@ -995,8 +995,13 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
          (setq ac-clang-current-candidate (ac-clang-parse-completion-results proc))
          ;; (message "ac-clang results arrived")
          (setq ac-clang-status 'acknowledged)
-         (ac-start :force-init t)
-         (ac-update)
+         ;(ac-start :force-init t)
+	 ;(ac-update t)
+	 (setq ac-prefix (buffer-substring-no-properties 
+	 		  (or (ac-clang-prefix)
+			      (point))
+			  (point)))
+	 (ac-complete-clang-async)
          (setq ac-clang-status 'idle)))))
 
 (defun ac-clang-candidate ()
