@@ -74,8 +74,8 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
   (ac-clang-update-cmdlineargs))
 
 (defun ac-clang-set-cflags-from-shell-command ()
-  "Set `ac-clang-cflags' to a shell command's output."
-  "set new cflags for ac-clang from shell command output"
+  "Set `ac-clang-cflags' to a shell command's output.  Set new
+cflags for ac-clang from shell command output"
   (interactive)
   (setq ac-clang-cflags
         (split-string
@@ -141,7 +141,8 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 (defun ac-clang-handle-error (res args)
   (goto-char (point-min))
   (let* ((buf (get-buffer-create ac-clang-error-buffer-name))
-         (cmd (concat ac-clang-executable " " (mapconcat 'identity args " ")))
+         (cmd (concat ac-clang-complete-executable
+		      " " (mapconcat 'identity args " ")))
          (pattern (format ac-clang-completion-pattern ""))
          (err (if (re-search-forward pattern nil t)
                   (buffer-substring-no-properties (point-min)
@@ -165,7 +166,7 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
         res)
     (with-current-buffer buf (erase-buffer))
     (setq res (apply 'call-process-region (point-min) (point-max)
-                     ac-clang-executable nil buf nil args))
+                     ac-clang-complete-executable nil buf nil args))
     (with-current-buffer buf
       (unless (eq 0 res)
         (ac-clang-handle-error res args))
@@ -992,16 +993,21 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
 	 (setq ac-clang-status 'idle))
 
         (otherwise
-         (setq ac-clang-current-candidate (ac-clang-parse-completion-results proc))
-         ;; (message "ac-clang results arrived")
+         (setq ac-clang-current-candidate
+	       (ac-clang-parse-completion-results proc))
+	 (message "ac-clang results arrived")
          (setq ac-clang-status 'acknowledged)
-         ;(ac-start :force-init t)
-	 ;(ac-update t)
-	 (setq ac-prefix (buffer-substring-no-properties 
-	 		  (or (ac-clang-prefix)
-			      (point))
-			  (point)))
-	 (ac-complete-clang-async)
+	 (ac-start :force-init t)
+	 (ac-update t)
+	 ;; (setq ac-prefix (buffer-substring-no-properties 
+	 ;; 		  (or (ac-clang-prefix)
+	 ;; 		      (point))
+	 ;; 		  (point)))
+
+	 ;; (ac-candidates)
+	 ;; (ac-update)
+
+;	 (ac-complete-clang-async)
          (setq ac-clang-status 'idle)))))
 
 (defun ac-clang-candidate ()
@@ -1026,7 +1032,7 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
      ac-clang-current-candidate)
 
     (wait
-     ;; (message "ac-clang-candidate triggered - wait")
+     (message "ac-clang-candidate triggered - wait")
      ac-clang-current-candidate)
 
     (acknowledged
@@ -1035,8 +1041,11 @@ This variable will typically contain include paths, e.g., (\"-I~/MyProject\" \"-
      ac-clang-current-candidate)
 
     (preempted
-     ;; (message "clang-async is preempted by a critical request")
-     nil)))
+     (message "clang-async is preempted by a critical request")
+     nil)
+
+    (otherwise
+     (message "WTF state are we in?!"))))
 
 
 ;; Syntax checking with flymake
