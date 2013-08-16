@@ -410,6 +410,7 @@ cflags for ac-clang from shell command output"
 (defvar ac-clang-saved-prefix "")
 
 (defvar current-clang-file "")
+(defvar current-clang-file-buffer nil)
 
 ;;(make-variable-buffer-local 'ac-clang-status)
 ;;(make-variable-buffer-local 'ac-clang-current-candidate)
@@ -955,60 +956,61 @@ cflags for ac-clang from shell command output"
 (defun ac-clang-filter-output (proc string)
   (ac-clang-append-process-output-to-process-buffer proc string)
   (if (string= (substring string -1 nil) "$")
-      (case ac-clang-status
-        (preempted
-         (setq ac-clang-status 'idle)
-         (ac-start)
-         (ac-update))
+      (with-current-buffer (get-file-buffer current-clang-file)
+       (case ac-clang-status
+	 (preempted
+	  (setq ac-clang-status 'idle)
+	  (ac-start)
+	  (ac-update))
         
-	(locate 
-	 (setq ac-clang-status 'idle)
-	 (let ((result (ac-clang-parse-location-results proc)))
-	   (ac-clang-goto-definition (car result) 
-				     (cadr result)
-				     (caddr result))))
+	 (locate 
+	  (setq ac-clang-status 'idle)
+	  (let ((result (ac-clang-parse-location-results proc)))
+	    (ac-clang-goto-definition (car result) 
+				      (cadr result)
+				      (caddr result))))
 
-	(prj-id 
-	 (setq ac-clang-status 'idle)
-	 (ac-clang-project-new-parse-result proc))
+	 (prj-id 
+	  (setq ac-clang-status 'idle)
+	  (ac-clang-project-new-parse-result proc))
 
-	(prj-locate 
-	 (setq ac-clang-status 'idle)
-	 (let ((oldpt (point))
-	       (result (ac-clang-project-locate-display-results proc)))
-	   (goto-char oldpt)
-	   (when result
-	     (let ((file (nth 0 result))
-		   (line (nth 1 result))
-		   (col  (nth 2 result)))
-	       (ac-clang-goto-definition file line col)))))
+	 (prj-locate 
+	  (setq ac-clang-status 'idle)
+	  (let ((oldpt (point))
+		(result (ac-clang-project-locate-display-results proc)))
+	    (goto-char oldpt)
+	    (when result
+	      (let ((file (nth 0 result))
+		    (line (nth 1 result))
+		    (col  (nth 2 result)))
+		(ac-clang-goto-definition file line col)))))
 
-	(prj-srcs 
-	 (let ((next-src (pop ac-clang-project-srcs-queue)))
-	   (if next-src 
-	       (ac-clang-project-add-src proc next-src)
-	     (setq ac-clang-status 'idle))))
+	 (prj-srcs 
+	  (let ((next-src (pop ac-clang-project-srcs-queue)))
+	    (if next-src 
+		(ac-clang-project-add-src proc next-src)
+	      (setq ac-clang-status 'idle))))
 
-	(prj-ignore 
-	 (setq ac-clang-status 'idle))
+	 (prj-ignore 
+	  (setq ac-clang-status 'idle))
 
-        (otherwise
-         (setq ac-clang-current-candidate
-	       (ac-clang-parse-completion-results proc))
-	 (message "ac-clang results arrived")
-         (setq ac-clang-status 'acknowledged)
-	 (ac-start :force-init t)
-	 (ac-update t)
-	 ;; (setq ac-prefix (buffer-substring-no-properties 
-	 ;; 		  (or (ac-clang-prefix)
-	 ;; 		      (point))
-	 ;; 		  (point)))
+	 (otherwise
+	  (setq ac-clang-current-candidate
+	        (ac-clang-parse-completion-results proc))
+	  (message "ac-clang results arrived")
+	  (setq ac-clang-status 'acknowledged)
+	  (ac-start :force-init t)
+	  (ac-update t)
+	  ;; (setq ac-prefix (buffer-substring-no-properties 
+	  ;; 		   (or (ac-clang-prefix)
+	  ;; 		       (point))
+	  ;; 		   (point)))
 
-	 ;; (ac-candidates)
-	 ;; (ac-update)
+	  ;; (ac-candidates)
+	  ;;(ac-update)
 
-;	 (ac-complete-clang-async)
-         (setq ac-clang-status 'idle)))))
+	  ;;(ac-complete-clang-async)
+	  (setq ac-clang-status 'idle))))))
 
 (defun ac-clang-candidate ()
   (case ac-clang-status
