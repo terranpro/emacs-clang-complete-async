@@ -995,6 +995,7 @@ cflags for ac-clang from shell command output"
 	  (setq ac-clang-status 'idle))
 
 	 (otherwise
+	  (message (format "AC Clang Proc Filter Point: %d" (point)))
 	  (setq ac-clang-current-candidate
 	        (ac-clang-parse-completion-results proc))
 	  (message "ac-clang results arrived")
@@ -1030,6 +1031,7 @@ cflags for ac-clang from shell command output"
      (setq ac-clang-current-candidate nil)
 
      ;; send completion request
+     (message (format "AC Clang Candidate Point: %d" (point)))
      (ac-clang-send-completion-request ac-clang-completion-process)
      ac-clang-current-candidate)
 

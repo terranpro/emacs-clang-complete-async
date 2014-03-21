@@ -748,7 +748,7 @@ void project_locate(completion_Project *prj, int line, int column)
   }
   
   else if ( clang_reparseTranslationUnit( prj->tunits[ i ], 0, NULL, 
-				     DEFAULT_PARSE_OPTIONS ) != 0 ) {
+					  DEFAULT_PARSE_OPTIONS ) != 0 ) {
     fprintf(stdout, "Reparsing Translation Unit Failed!\n");
     clang_disposeTranslationUnit( prj->tunits[ i ] );
     prj->tunits[ i ] = NULL;

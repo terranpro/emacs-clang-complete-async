@@ -2,3 +2,4 @@
 src/dep/
 src/obj/
 clang-complete
+.dir-locals.el*
