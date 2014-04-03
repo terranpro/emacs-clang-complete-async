@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
@@ -77,11 +78,12 @@ void completion_doCompletion(completion_Session *session, FILE *fp)
 
     /* calculate and show code completions results */
     res = completion_codeCompleteAt(session, row, column);
-    clang_sortCodeCompletionResults(res->Results, res->NumResults);
+    if (res) {
+	    clang_sortCodeCompletionResults(res->Results, res->NumResults);
 
-    int len = strlen(prefix);
-    if (prefix[len-1] == '\n')
-      prefix[len-1] = '\0';
+	    int len = strlen(prefix);
+	    if (prefix[len-1] == '\n')
+		    prefix[len-1] = '\0';
 
     //fprintf(stdout, "COMPLETION: %s : [#%d#]\n", prefix, strlen(prefix));
     /* if (strcmp(prefix, "") == 0 || prefix[0] == '\0') { */
@@ -90,7 +92,7 @@ void completion_doCompletion(completion_Session *session, FILE *fp)
     /* } */
 
     /* fprintf(stderr, "code completion results: %d\n", res->NumResults); */
-    completion_printCodeCompletionResults(res, stdout, prefix);
+	    completion_printCodeCompletionResults(res, stdout, prefix);
 
     //fprintf(stdout, "COMPLETION: %s\n", prefix);
     /* fprintf(stdout, "COMPLETION: before: %lu\n", res->NumResults); */
@@ -98,9 +100,11 @@ void completion_doCompletion(completion_Session *session, FILE *fp)
     /* fprintf(stdout, "COMPLETION: %d\n", */
     /* 	    clang_codeCompleteGetContainerKind(res, NULL)); */
 
-    fprintf(stdout, "\n$"); fflush(stdout);    /* we need to inform emacs that all 
-                                                candidates has already been sent */
-    clang_disposeCodeCompleteResults(res);
+	    clang_disposeCodeCompleteResults(res);
+    }
+
+    fprintf(stdout, "\n$"); fflush(stdout);    /* we need to inform emacs that all
+                                                  candidates has already been sent */
 }
 
 
