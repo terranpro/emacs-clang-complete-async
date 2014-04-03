@@ -24,8 +24,8 @@ static void __read_n_bytes(FILE *fp, char *buffer, int len)
 }
 
 
-/* Read the source file portion of the message to the source code buffer in 
-   specified session object. 
+/* Read the source file portion of the message to the source code buffer in
+   specified session object.
 
    Sourcefile segment always starts with source_length: [#len#], followed by a
    newline character, then the actual source code. Length of the source code is
@@ -41,7 +41,7 @@ static void completion_readSourcefile(completion_Session *session, FILE *fp)
     {
         /* expand the buffer two-fold of source size */
         session->buffer_capacity = source_length * 2;
-        session->src_buffer = 
+        session->src_buffer =
             (char*)realloc(session->src_buffer, session->buffer_capacity);
     }
 
@@ -51,7 +51,7 @@ static void completion_readSourcefile(completion_Session *session, FILE *fp)
 }
 
 
-/* Read completion request (where to complete at and current source code) from message 
+/* Read completion request (where to complete at and current source code) from message
    header and calculate completion candidates.
 
    Message format:
@@ -69,7 +69,7 @@ void completion_doCompletion(completion_Session *session, FILE *fp)
     char prefix[512];
     fscanf(fp, "row:%d",    &row);    __skip_the_rest(fp);
     fscanf(fp, "column:%d", &column); __skip_the_rest(fp);
-    fscanf(fp, "prefix:"); 
+    fscanf(fp, "prefix:");
     fgets(prefix, sizeof(prefix), fp);
     //__skip_the_rest(fp);
 
@@ -138,7 +138,7 @@ static void completion_freeCmdlineArgs(completion_Session *session)
 
 /* Update command line arguments passing to clang translation unit. Format
    of the coming CMDLINEARGS message is as follows:
-   
+
        num_args: [#n_args#]
        arg1 arg2 ... (there should be n_args items here)
 */
@@ -165,7 +165,7 @@ void completion_doCmdlineArgs(completion_Session *session, FILE *fp)
         strcpy(session->cmdline_args[i_arg], arg);
     }
 
-    /* we have to rebuild our translation units to make these cmdline args changes 
+    /* we have to rebuild our translation units to make these cmdline args changes
        take place */
     clang_disposeTranslationUnit(session->cx_tu);
     completion_parseTranslationUnit(session);
@@ -174,7 +174,7 @@ void completion_doCmdlineArgs(completion_Session *session, FILE *fp)
 
 /* Update command line arguments and source files passing to clang translation unit. Format
    of the coming FILECHANGED message is as follows:
-       filename: [#new filename#]  
+       filename: [#new filename#]
        num_args: [#n_args#]
        arg1 arg2 ... (there should be n_args items here)
 */
@@ -208,8 +208,8 @@ void completion_doFileChanged(completion_Session *session, FILE *fp)
         session->cmdline_args[i_arg] = (char*)calloc(sizeof(char), strlen(arg) + 1);
         strcpy(session->cmdline_args[i_arg], arg);
     }
-    
-    /* we have to rebuild our translation units to make these cmdline args changes 
+
+    /* we have to rebuild our translation units to make these cmdline args changes
        take place */
     clang_disposeTranslationUnit(session->cx_tu);
     completion_parseTranslationUnit(session);
@@ -249,7 +249,7 @@ void completion_doSyntaxCheck(completion_Session *session, FILE *fp)
 void completion_doProject(completion_Session *session, FILE *fp)
 {
   BARK;
-  project_dispatch( fp );  
+  project_dispatch( fp );
 }
 
 /* Locate the definition (or declaration?!) of tag */
@@ -260,14 +260,14 @@ void completion_doLocate(completion_Session *session, FILE *fp)
 
     fscanf(fp, "row:%d",    &row);    __skip_the_rest(fp);
     fscanf(fp, "column:%d", &column); __skip_the_rest(fp);
-    fscanf(fp, "prefix:"); 
+    fscanf(fp, "prefix:");
     fgets(prefix, sizeof(prefix), fp);
 
     /* get a copy of fresh source file */
     completion_readSourcefile(session, fp);
     completion_reparseTranslationUnit(session);
 
-    LocationResult loc = completion_locateAt(session->cx_tu, 
+    LocationResult loc = completion_locateAt(session->cx_tu,
 					     session->src_filename,
 					     row, column);
     CXString cxfstr = clang_getFileName( loc.file );
@@ -276,13 +276,13 @@ void completion_doLocate(completion_Session *session, FILE *fp)
     fprintf(stdout, "line:%d\n", loc.line);
     fprintf(stdout, "column:%d\n", loc.column);
 
-    fprintf(stdout, "$"); 
+    fprintf(stdout, "$");
     fflush(stdout);
 
     clang_disposeString( cxfstr );
 }
 
-/* When emacs buffer is killed, a SHUTDOWN message is sent automatically by a hook 
+/* When emacs buffer is killed, a SHUTDOWN message is sent automatically by a hook
    function to inform the completion server (this program) to terminate. */
 void completion_doShutdown(completion_Session *session, FILE *fp)
 {
@@ -299,9 +299,3 @@ void completion_doShutdown(completion_Session *session, FILE *fp)
 
     exit(0);   /* terminate completion process */
 }
-
-
-
-
-
-
