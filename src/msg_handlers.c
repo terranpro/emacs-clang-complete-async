@@ -101,6 +101,20 @@ void completion_doCompletion(completion_Session *session, FILE *fp)
     /* 	    clang_codeCompleteGetContainerKind(res, NULL)); */
 
 	    clang_disposeCodeCompleteResults(res);
+    } else {
+	    fprintf(stdout, "Code Complete Failed!\n");
+	    if ( completion_reparseTranslationUnit( session ) != 0 ) {
+		    fprintf(stdout, "Reparse Failed! TU invalid!\n");
+	    }
+
+	    int diagcount = clang_getNumDiagnostics( session->cx_tu );
+	    for ( int i = 0; i < diagcount; ++i ) {
+		    CXDiagnostic diag = clang_getDiagnostic( session->cx_tu, i );
+		    CXString diagspell = clang_getDiagnosticSpelling( diag );
+		    fprintf(stdout, "Error: %s\n", clang_getCString( diagspell ) );
+		    clang_disposeString( diagspell );
+		    clang_disposeDiagnostic( diag );
+	    }
     }
 
     fprintf(stdout, "\n$"); fflush(stdout);    /* we need to inform emacs that all

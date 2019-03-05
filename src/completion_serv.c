@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>
@@ -15,16 +16,16 @@ static void __copy_cmdlineArgs(int argc, char *argv[], completion_Session *sessi
     /* copy argv[1..argc-1] to cmdline_args */
     for ( ; i_arg < session->num_args; i_arg++)
     {
-        session->cmdline_args[i_arg] = 
+        session->cmdline_args[i_arg] =
             (char*)calloc(sizeof(char), strlen(argv[i_arg + 1]) + 1);
 
         strcpy(session->cmdline_args[i_arg], argv[i_arg + 1]);
     }
 }
 
-/* Initialize basic information for completion, such as source filename, initial source 
+/* Initialize basic information for completion, such as source filename, initial source
    buffer and command line arguments for clang */
-void 
+void
 __initialize_completionSession(int argc, char *argv[], completion_Session *session)
 {
     /* filename shall be the last parameter */
@@ -37,8 +38,8 @@ __initialize_completionSession(int argc, char *argv[], completion_Session *sessi
 }
 
 
-/* Initialize session object and launch the completion server, preparse the source file and 
-   build the AST for furture code completion requests  
+/* Initialize session object and launch the completion server, preparse the source file and
+   build the AST for furture code completion requests
 */
 void startup_completionSession(int argc, char *argv[], completion_Session *session)
 {
@@ -66,14 +67,14 @@ static struct CXUnsavedFile __get_CXUnsavedFile(const completion_Session *sessio
     return unsaved_files;
 }
 
-CXTranslationUnit 
+CXTranslationUnit
 completion_parseTranslationUnit(completion_Session *session)
 {
     struct CXUnsavedFile unsaved_files = __get_CXUnsavedFile(session);
-    session->cx_tu = 
+    session->cx_tu =
         clang_parseTranslationUnit(
-            session->cx_index, session->src_filename, 
-            (const char * const *) session->cmdline_args, session->num_args, 
+            session->cx_index, session->src_filename,
+            (const char * const *) session->cmdline_args, session->num_args,
             &unsaved_files, 1,
             session->ParseOptions);
 
@@ -83,23 +84,23 @@ completion_parseTranslationUnit(completion_Session *session)
 int completion_reparseTranslationUnit(completion_Session *session)
 {
     struct CXUnsavedFile unsaved_files = __get_CXUnsavedFile(session);
-    return 
+    return
         clang_reparseTranslationUnit(
             session->cx_tu, 1, &unsaved_files, session->ParseOptions);
 }
 
-CXCodeCompleteResults* 
+CXCodeCompleteResults*
 completion_codeCompleteAt(
     completion_Session *session, int line, int column)
 {
     struct CXUnsavedFile unsaved_files = __get_CXUnsavedFile(session);
-    return 
+    return
         clang_codeCompleteAt(
-            session->cx_tu, session->src_filename, line, column, 
+            session->cx_tu, session->src_filename, line, column,
             &unsaved_files, 1, session->CompleteAtOptions);
 }
 
-static void 
+static void
 print_LocationResult(CXCursor cursor, CXSourceLocation loc)
 {
   CXFile cxfile;
@@ -116,7 +117,7 @@ print_LocationResult(CXCursor cursor, CXSourceLocation loc)
   cxstrcursor = clang_getCursorKindSpelling( cursor.kind );
   cxstrfile = clang_getFileName( cxfile );
 
-  fprintf(stdout, "LOCATE:\ndesc:%s\nfile:%s\nline:%d\ncolumn:%d\n", 
+  fprintf(stdout, "LOCATE:\ndesc:%s\nfile:%s\nline:%d\ncolumn:%d\n",
 	  clang_getCString( cxstrcursor ),
 	  clang_getCString( cxstrfile ),
 	  l,
@@ -162,7 +163,7 @@ void updateClosestCursor(ClosestCursor *cc, CXCursor c, CXFile file,
 
 void findRefsInFiles(CXCursor c, CXFile *files)
 {
-  
+
 }
 
 enum CXChildVisitResult
@@ -199,7 +200,7 @@ closestCursorVistitor(CXCursor c, CXCursor p, CXClientData d)
 }
 
 LocationResult
-findClosestCursor(CXTranslationUnit tu, CXFile file, 
+findClosestCursor(CXTranslationUnit tu, CXFile file,
 		  int line, int column)
 {
   LocationResult lr = { 0, 0, 0 };
@@ -217,11 +218,11 @@ findClosestCursor(CXTranslationUnit tu, CXFile file,
 
 LocationResult
 //completion_locateAt(completion_Session *session, int line, int column)
-completion_locateAt(CXTranslationUnit tu, const char *src_filename, 
+completion_locateAt(CXTranslationUnit tu, const char *src_filename,
 		    int line, int column)
 {
   CXSourceLocation loc;
-  CXFile file = clang_getFile( tu, 
+  CXFile file = clang_getFile( tu,
 			       src_filename );
   LocationResult lr = { 0, 0, 0 };
 
@@ -250,12 +251,12 @@ completion_locateAt(CXTranslationUnit tu, const char *src_filename,
     return lr;
   }
 
-  if ( cursor.kind >= CXCursor_FirstInvalid && 
+  if ( cursor.kind >= CXCursor_FirstInvalid &&
        cursor.kind <= CXCursor_LastInvalid ) {
     fprintf(stdout, "InVALID Cursor! FINDING CLOSEST CURSOR\n");
     return findClosestCursor( tu, file, line, column );
   }
-  
+
   //clang_visitChildren( cursor, myvisitor, NULL );
 
   while ( clang_isReference( cursor.kind ) ) {
@@ -263,7 +264,7 @@ completion_locateAt(CXTranslationUnit tu, const char *src_filename,
     cursor = clang_getCursorReferenced( cursor );
     fprintf(stdout, "New Cursor Kind: %d\n", clang_getCursorKind(cursor));
   }
-  
+
   if ( cursor.kind >= CXCursor_FirstRef && cursor.kind <= CXCursor_LastRef ) {
     fprintf(stdout, "REFERENCE TYPE!\n");
     cursor = clang_getCursorReferenced( cursor );
@@ -326,7 +327,7 @@ completion_locateAt(CXTranslationUnit tu, const char *src_filename,
   loc = clang_getCursorLocation( cursor );
   clang_getSpellingLocation( loc, &file, &l, &c, NULL );
 
-  
+
   lr.file = file;
   lr.line = l;
   lr.column = c;

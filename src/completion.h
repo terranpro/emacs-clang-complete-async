@@ -1,9 +1,12 @@
 #ifndef _COMPLETION_SESSION_H_
 #define _COMPLETION_SESSION_H_
 
-
+#include <stdio.h>
 #include <clang-c/Index.h>
 
+#ifndef LINE_MAX
+#define LINE_MAX 2048
+#endif /* LINE_MAX */
 
 typedef struct __completion_Session_struct
 {
@@ -43,12 +46,12 @@ typedef struct __completion_Session_struct
 
 
 
-/* Initialize basic information for completion, such as source filename, initial source 
+/* Initialize basic information for completion, such as source filename, initial source
    buffer and command line arguments to pass to clang */
-void 
+void
 __initialize_completionSession(int argc, char *argv[], completion_Session *session);
 
-/* Initialize session object and launch the completion server, preparse the source file and 
+/* Initialize session object and launch the completion server, preparse the source file and
    build the AST for furture code completion requests  */
 void startup_completionSession(int argc, char *argv[], completion_Session *session);
 
@@ -76,29 +79,9 @@ typedef struct LocationResult {
 
 LocationResult
 //completion_locateAt(completion_Session *session, int line, int column);
-completion_locateAt(CXTranslationUnit tu, const char *src_file, 
+completion_locateAt(CXTranslationUnit tu, const char *src_file,
 		    int line, int column);
 
 
 
 #endif /* _COMPLETION_SESSION_H_ */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
